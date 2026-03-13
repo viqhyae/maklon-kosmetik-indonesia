@@ -580,6 +580,8 @@ export default function Dashboard({ databaseBrands }) {
 
     // --- STATE FORM ---
     const [brandInput, setBrandInput] = useState({ name: '', description: '', ownerId: '' });
+    const [logoFile, setLogoFile] = useState(null);
+    const [logoPreview, setLogoPreview] = useState(null);
     const [editingBrandId, setEditingBrandId] = useState(null);
 
     const [userInput, setUserInput] = useState({ name: '', email: '', role: 'Brand Owner', password: '' });
@@ -626,42 +628,39 @@ export default function Dashboard({ databaseBrands }) {
 
     const handleSaveBrand = (e) => {
         e.preventDefault();
-        // Cegah simpan kalau nama kosong
         if (!brandInput.name) return;
 
-        if (editingBrandId) {
-            // --- FITUR EDIT (Memori Sementara) ---
-            setBrands(brands.map(b => b.id === editingBrandId ? {
-                ...b,
-                name: brandInput.name,
-                description: brandInput.description || "-",
-                ownerId: brandInput.ownerId ? Number(brandInput.ownerId) : null
-            } : b));
-            showToast("Data brand berhasil diperbarui!");
-            setBrandInput({ name: '', description: '', ownerId: '' });
-            setEditingBrandId(null);
-            setIsBrandModalOpen(false);
-        } else {
-            // --- FITUR TAMBAH BARU (Masuk ke Database) ---
-            const randomCode = Math.floor(1000 + Math.random() * 9000);
+        // Bikin FormData karena kita mau kirim file (Gambar)
+        const formData = new FormData();
+        formData.append('name', brandInput.name);
+        formData.append('owner_name', brandInput.ownerId ? brandInput.ownerId.toString() : '');
+        formData.append('description', brandInput.description || "-");
+        if (logoFile) {
+            formData.append('logo', logoFile);
+        }
 
-            // Kita kirim menggunakan variabel brandInput (bukan newBrand)
-            router.post('/brands', {
-                name: brandInput.name,
-                brand_code: `CL-${randomCode}`,
-                owner_name: brandInput.ownerId ? brandInput.ownerId.toString() : null,
-                description: brandInput.description || "-",
-            }, {
+        if (editingBrandId) {
+            // --- FITUR EDIT DATABASE ---
+            router.post(`/brands/update/${editingBrandId}`, formData, {
+                onSuccess: () => {
+                    showToast("Data brand berhasil diperbarui!");
+                    setBrandInput({ name: '', description: '', ownerId: '' });
+                    setLogoFile(null); setLogoPreview(null);
+                    setEditingBrandId(null);
+                    setIsBrandModalOpen(false);
+                }
+            });
+        } else {
+            // --- FITUR TAMBAH BARU DATABASE ---
+            const randomCode = Math.floor(1000 + Math.random() * 9000);
+            formData.append('brand_code', `CL-${randomCode}`);
+
+            router.post('/brands', formData, {
                 onSuccess: () => {
                     showToast("Brand baru berhasil ditambahkan!");
-                    // Reset form kembali kosong
                     setBrandInput({ name: '', description: '', ownerId: '' });
+                    setLogoFile(null); setLogoPreview(null);
                     setIsBrandModalOpen(false);
-                },
-                onError: (errors) => {
-                    // Munculkan error jika ditolak oleh Laravel
-                    alert("Gagal menyimpan! Error: " + JSON.stringify(errors));
-                    console.log("Error detail:", errors);
                 }
             });
         }
@@ -683,8 +682,12 @@ export default function Dashboard({ databaseBrands }) {
             title: "Hapus Brand?",
             message: "Data brand ini akan dihapus permanen. Produk yang terkait mungkin akan kehilangan referensi. Lanjutkan?",
             onConfirm: () => {
-                setBrands(brands.filter(b => b.id !== id));
-                showToast("Brand berhasil dihapus!");
+                // Di sini kita panggil backend Laravel untuk menghapus datanya
+                router.delete(`/brands/${id}`, {
+                    onSuccess: () => {
+                        showToast("Brand berhasil dihapus!");
+                    }
+                });
             }
         });
     };
@@ -1237,13 +1240,34 @@ export default function Dashboard({ databaseBrands }) {
                                     <div className="flex flex-col sm:flex-row gap-6 items-start">
 
                                         {/* Area Upload Logo (Rasio 1:1) */}
-                                        <div className="w-full sm:w-40 aspect-square border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-[#C1986E] transition-all group bg-slate-50/50 p-4 flex-shrink-0">
-                                            <div className="bg-white p-3 rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
-                                                <UploadCloud size={20} className="group-hover:text-[#C1986E]" />
-                                            </div>
-                                            <span className="text-[11px] font-medium text-center px-2">Logo Brand</span>
-                                            <span className="text-[9px] text-slate-300 mt-1">(1:1 Ratio)</span>
-                                        </div>
+                                        {/* KOTAK UPLOAD LOGO YANG SUDAH BERFUNGSI */}
+                                        <label className="w-full sm:w-40 aspect-square border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-[#C1986E] transition-all group bg-slate-50/50 p-4 flex-shrink-0 relative overflow-hidden">
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={(e) => {
+                                                    const file = e.target.files[0];
+                                                    if (file) {
+                                                        setLogoFile(file);
+                                                        setLogoPreview(URL.createObjectURL(file));
+                                                    }
+                                                }}
+                                            />
+
+                                            {/* Jika ada preview gambar, tampilkan gambarnya. Jika tidak, tampilkan ikon cloud */}
+                                            {logoPreview ? (
+                                                <img src={logoPreview} alt="Preview" className="w-full h-full object-cover absolute inset-0" />
+                                            ) : (
+                                                <>
+                                                    <div className="bg-white p-3 rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                                                        <UploadCloud className="group-hover:text-[#C1986E]" size={20} />
+                                                    </div>
+                                                    <span className="text-[11px] font-medium text-center px-2">Logo Brand</span>
+                                                    <span className="text-[9px] text-slate-300 mt-1">(1:1 Ratio)</span>
+                                                </>
+                                            )}
+                                        </label>
 
                                         <div className="flex-1 w-full space-y-4">
                                             <div className="space-y-1.5">
