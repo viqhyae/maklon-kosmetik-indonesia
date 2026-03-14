@@ -73,7 +73,14 @@ class BrandController extends Controller {
             $data['logo_url'] = $request->file('logo')->store('logos', 'public');
         }
 
-        Brand::create($data);
+        $brand = Brand::create($data);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'brand' => $this->brandPayload($brand),
+            ], 201);
+        }
+
         return redirect()->back();
     }
 
@@ -96,12 +103,41 @@ class BrandController extends Controller {
         }
 
         $brand->update($data);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'brand' => $this->brandPayload($brand->fresh()),
+            ]);
+        }
+
         return redirect()->back();
     }
 
     public function destroy(Brand $brand) {
+        $deletedId = $brand->id;
+
         if ($brand->logo_url) Storage::disk('public')->delete($brand->logo_url);
         $brand->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'deleted_id' => $deletedId,
+            ]);
+        }
+
         return redirect()->back();
+    }
+
+    private function brandPayload(Brand $brand): array
+    {
+        return [
+            'id' => $brand->id,
+            'name' => $brand->name,
+            'brand_code' => $brand->brand_code,
+            'owner_name' => $brand->owner_name,
+            'description' => $brand->description,
+            'logo_url' => $brand->logo_url,
+            'status' => $brand->status,
+        ];
     }
 }

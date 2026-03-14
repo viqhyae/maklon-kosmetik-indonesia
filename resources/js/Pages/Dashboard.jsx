@@ -54,6 +54,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import { router } from '@inertiajs/react';
+import axios from 'axios';
 import { createPortal } from 'react-dom';
 // Import QRCode untuk generate QR berbasis Vektor (SVG)
 import { QRCodeSVG } from 'qrcode.react';
@@ -671,18 +672,36 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             setBrandInput((currentInput) => ({ ...currentInput, status: newStatus }));
         }
 
-        router.post(`/brands/update/${brand.id}`, {
+        axios.post(`/brands/update/${brand.id}`, {
             name: brand.name,
             owner_name: brand.owner_name || '',
             description: brand.description || '',
             status: newStatus,
-        }, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                showToast(`Status Brand diubah menjadi ${getBrandStatusLabel(newStatus)}`);
-            },
-            onError: (errors) => {
+        })
+            .then((response) => {
+                const savedBrand = normalizeBrandRecord(response?.data?.brand || { ...brand, status: newStatus });
+
+                setBrands((currentBrands) =>
+                    currentBrands.map((currentBrand) =>
+                        currentBrand.id === brand.id ? savedBrand : currentBrand
+                    )
+                );
+
+                if (editingBrandId === brand.id) {
+                    setBrandInput((currentInput) => ({
+                        ...currentInput,
+                        name: savedBrand.name || currentInput.name,
+                        owner_name: savedBrand.owner_name || '',
+                        description: savedBrand.description || '',
+                        status: normalizeBrandStatus(savedBrand.status),
+                    }));
+                }
+
+                showToast(`Status Brand diubah menjadi ${getBrandStatusLabel(savedBrand.status)}`);
+            })
+            .catch((error) => {
+                const errors = error?.response?.data?.errors || {};
+
                 setBrands((currentBrands) =>
                     currentBrands.map((currentBrand) =>
                         currentBrand.id === brand.id ? { ...currentBrand, status: previousStatus } : currentBrand
@@ -692,9 +711,10 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                     setBrandInput((currentInput) => ({ ...currentInput, status: previousStatus }));
                 }
                 showToast(getFirstErrorMessage(errors, `Gagal mengubah status ${brand.name}.`), "error");
-            },
-            onFinish: () => setSavingBrandStatusId(null),
-        });
+            })
+            .finally(() => {
+                setSavingBrandStatusId(null);
+            });
     };
 
     const handleSaveBrand = (e) => {
@@ -715,34 +735,45 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             formData.append('logo', logoFile);
         }
 
-        if (editingBrandId) {
-            router.post(`/brands/update/${editingBrandId}`, formData, {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => {
-                    showToast("Data brand berhasil diperbarui!");
-                    closeBrandModal();
-                },
-                onError: (errors) => {
-                    showToast(getFirstErrorMessage(errors, "Gagal memperbarui data brand."), "error");
-                }
-            });
-        } else {
+        const isEditing = Boolean(editingBrandId);
+
+        if (!isEditing) {
             const randomCode = Math.floor(1000 + Math.random() * 9000);
             formData.append('brand_code', `CL-${randomCode}`);
-
-            router.post('/brands', formData, {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => {
-                    showToast("Brand baru berhasil ditambahkan!");
-                    closeBrandModal();
-                },
-                onError: (errors) => {
-                    showToast(getFirstErrorMessage(errors, "Gagal menambahkan brand baru."), "error");
-                }
-            });
         }
+
+        const targetUrl = isEditing ? `/brands/update/${editingBrandId}` : '/brands';
+
+        axios.post(targetUrl, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        })
+            .then((response) => {
+                const savedBrand = normalizeBrandRecord(response?.data?.brand || {});
+
+                if (savedBrand.id) {
+                    if (isEditing) {
+                        setBrands((currentBrands) =>
+                            currentBrands.map((currentBrand) =>
+                                currentBrand.id === savedBrand.id ? savedBrand : currentBrand
+                            )
+                        );
+                    } else {
+                        setBrands((currentBrands) => [savedBrand, ...currentBrands]);
+                    }
+                }
+
+                showToast(isEditing ? "Data brand berhasil diperbarui!" : "Brand baru berhasil ditambahkan!");
+                closeBrandModal();
+            })
+            .catch((error) => {
+                const errors = error?.response?.data?.errors || {};
+                showToast(
+                    getFirstErrorMessage(errors, isEditing ? "Gagal memperbarui data brand." : "Gagal menambahkan brand baru."),
+                    "error"
+                );
+            });
     };
 
     const handleEditBrand = (brand) => {
@@ -764,12 +795,24 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             title: "Hapus Brand?",
             message: "Data brand ini akan dihapus permanen. Produk yang terkait mungkin akan kehilangan referensi. Lanjutkan?",
             onConfirm: () => {
-                // Di sini kita panggil backend Laravel untuk menghapus datanya
-                router.delete(`/brands/${id}`, {
-                    onSuccess: () => {
+                axios.delete(`/brands/${id}`)
+                    .then((response) => {
+                        const deletedId = Number(response?.data?.deleted_id || id);
+
+                        setBrands((currentBrands) =>
+                            currentBrands.filter((currentBrand) => Number(currentBrand.id) !== deletedId)
+                        );
+
+                        if (editingBrandId === deletedId) {
+                            closeBrandModal();
+                        }
+
                         showToast("Brand berhasil dihapus!");
-                    }
-                });
+                    })
+                    .catch((error) => {
+                        const errors = error?.response?.data?.errors || {};
+                        showToast(getFirstErrorMessage(errors, "Gagal menghapus brand."), "error");
+                    });
             }
         });
     };
@@ -1010,22 +1053,67 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             return;
         }
 
-        router.post('/product-categories', {
+        axios.post('/product-categories', {
             name,
             parent_id: parentId,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-            onSuccess: () => {
+        })
+            .then((response) => {
+                const createdCategory = response?.data?.category;
+                if (!createdCategory?.id) {
+                    showToast("Kategori berhasil ditambahkan, tetapi data respons tidak lengkap.", "error");
+                    return;
+                }
+
+                const createdId = Number(createdCategory.id);
+                const createdParentId = createdCategory.parent_id === null ? null : Number(createdCategory.parent_id);
+                const createdName = createdCategory.name;
+                const createdLevel = Number(createdCategory.level || level);
+
+                setCategories((currentCategories) => {
+                    if (createdLevel === 1) {
+                        return [
+                            ...currentCategories,
+                            { id: createdId, name: createdName, subCategories: [] },
+                        ];
+                    }
+
+                    if (createdLevel === 2) {
+                        return currentCategories.map((catL1) => {
+                            if (Number(catL1.id) !== createdParentId) return catL1;
+                            return {
+                                ...catL1,
+                                subCategories: [
+                                    ...(catL1.subCategories || []),
+                                    { id: createdId, name: createdName, subSubCategories: [] },
+                                ],
+                            };
+                        });
+                    }
+
+                    return currentCategories.map((catL1) => ({
+                        ...catL1,
+                        subCategories: (catL1.subCategories || []).map((catL2) => {
+                            if (Number(catL2.id) !== createdParentId) return catL2;
+                            return {
+                                ...catL2,
+                                subSubCategories: [
+                                    ...(catL2.subSubCategories || []),
+                                    { id: createdId, name: createdName },
+                                ],
+                            };
+                        }),
+                    }));
+                });
+
                 if (level === 1) setNewCatL1Name('');
                 if (level === 2) setNewCatL2Name('');
                 if (level === 3) setNewCatL3Name('');
                 showToast("Kategori baru berhasil ditambahkan!");
-            },
-            onError: (errors) => {
+            })
+            .catch((error) => {
+                const errors = error?.response?.data?.errors || {};
                 showToast(getFirstErrorMessage(errors, "Gagal menambahkan kategori."), "error");
-            }
-        });
+            });
     };
 
     const deleteCategory = (level, id) => {
@@ -1040,22 +1128,44 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             title: title,
             message: msg,
             onConfirm: () => {
-                router.delete(`/product-categories/${id}`, {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
-                        if (level === 1 && selectedCatL1 === id) {
+                axios.delete(`/product-categories/${id}`)
+                    .then((response) => {
+                        const deletedId = Number(response?.data?.deleted_id || id);
+
+                        setCategories((currentCategories) => {
+                            if (level === 1) {
+                                return currentCategories.filter((catL1) => Number(catL1.id) !== deletedId);
+                            }
+
+                            if (level === 2) {
+                                return currentCategories.map((catL1) => ({
+                                    ...catL1,
+                                    subCategories: (catL1.subCategories || []).filter((catL2) => Number(catL2.id) !== deletedId),
+                                }));
+                            }
+
+                            return currentCategories.map((catL1) => ({
+                                ...catL1,
+                                subCategories: (catL1.subCategories || []).map((catL2) => ({
+                                    ...catL2,
+                                    subSubCategories: (catL2.subSubCategories || []).filter((catL3) => Number(catL3.id) !== deletedId),
+                                })),
+                            }));
+                        });
+
+                        if (level === 1 && Number(selectedCatL1) === deletedId) {
                             setSelectedCatL1(null);
                             setSelectedCatL2(null);
-                        } else if (level === 2 && selectedCatL2 === id) {
+                        } else if (level === 2 && Number(selectedCatL2) === deletedId) {
                             setSelectedCatL2(null);
                         }
+
                         showToast("Kategori berhasil dihapus!");
-                    },
-                    onError: (errors) => {
+                    })
+                    .catch((error) => {
+                        const errors = error?.response?.data?.errors || {};
                         showToast(getFirstErrorMessage(errors, "Gagal menghapus kategori."), "error");
-                    }
-                });
+                    });
             }
         });
     };
