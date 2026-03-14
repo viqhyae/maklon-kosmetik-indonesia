@@ -3,14 +3,55 @@
 namespace App\Http\Controllers;
 
 use App\Models\Brand;
+use App\Models\ProductCategory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 
 class BrandController extends Controller {
     public function index() {
+        $databaseCategories = [];
+
+        if (Schema::hasTable('product_categories')) {
+            $databaseCategories = ProductCategory::query()
+                ->whereNull('parent_id')
+                ->with(['children.children'])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(function (ProductCategory $level1) {
+                    return [
+                        'id' => $level1->id,
+                        'name' => $level1->name,
+                        'subCategories' => $level1->children
+                            ->sortBy([['sort_order', 'asc'], ['id', 'asc']])
+                            ->values()
+                            ->map(function (ProductCategory $level2) {
+                                return [
+                                    'id' => $level2->id,
+                                    'name' => $level2->name,
+                                    'subSubCategories' => $level2->children
+                                        ->sortBy([['sort_order', 'asc'], ['id', 'asc']])
+                                        ->values()
+                                        ->map(function (ProductCategory $level3) {
+                                            return [
+                                                'id' => $level3->id,
+                                                'name' => $level3->name,
+                                            ];
+                                        })
+                                        ->all(),
+                                ];
+                            })
+                            ->all(),
+                    ];
+                })
+                ->all();
+        }
+
         return Inertia::render('Dashboard', [
-            'databaseBrands' => Brand::latest()->get()
+            'databaseBrands' => Brand::latest()->get(),
+            'databaseCategories' => $databaseCategories,
         ]);
     }
 

@@ -396,7 +396,7 @@ const LeafletMap = () => {
     );
 };
 
-export default function Dashboard({ databaseBrands }) {
+export default function Dashboard({ databaseBrands, databaseCategories }) {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMasterDataOpen, setIsMasterDataOpen] = useState(true);
@@ -504,7 +504,12 @@ export default function Dashboard({ databaseBrands }) {
         setBrands((databaseBrands || []).map(normalizeBrandRecord));
     }, [databaseBrands]);
 
-    const [categories, setCategories] = useState(INITIAL_CATEGORY_DATA);
+    const [categories, setCategories] = useState(
+        Array.isArray(databaseCategories) ? databaseCategories : INITIAL_CATEGORY_DATA
+    );
+    useEffect(() => {
+        setCategories(Array.isArray(databaseCategories) ? databaseCategories : INITIAL_CATEGORY_DATA);
+    }, [databaseCategories]);
 
     const [products, setProducts] = useState([
         {
@@ -984,35 +989,40 @@ export default function Dashboard({ databaseBrands }) {
     };
 
     const addCategory = (level) => {
-        const newId = Date.now();
+        let name = '';
+        let parentId = null;
+
         if (level === 1) {
-            if (!newCatL1Name) return;
-            setCategories([...categories, { id: newId, name: newCatL1Name, subCategories: [] }]);
-            setNewCatL1Name('');
+            name = newCatL1Name.trim();
         } else if (level === 2 && selectedCatL1) {
-            if (!newCatL2Name) return;
-            const updatedCats = categories.map(c1 => {
-                if (c1.id === selectedCatL1) return { ...c1, subCategories: [...c1.subCategories, { id: newId, name: newCatL2Name, subSubCategories: [] }] };
-                return c1;
-            });
-            setCategories(updatedCats);
-            setNewCatL2Name('');
-        } else if (level === 3 && selectedCatL1 && selectedCatL2) {
-            if (!newCatL3Name) return;
-            const updatedCats = categories.map(c1 => {
-                if (c1.id === selectedCatL1) {
-                    const updatedSub = c1.subCategories.map(c2 => {
-                        if (c2.id === selectedCatL2) return { ...c2, subSubCategories: [...c2.subSubCategories, { id: newId, name: newCatL3Name }] };
-                        return c2;
-                    });
-                    return { ...c1, subCategories: updatedSub };
-                }
-                return c1;
-            });
-            setCategories(updatedCats);
-            setNewCatL3Name('');
+            name = newCatL2Name.trim();
+            parentId = selectedCatL1;
+        } else if (level === 3 && selectedCatL2) {
+            name = newCatL3Name.trim();
+            parentId = selectedCatL2;
         }
-        showToast("Kategori baru berhasil ditambahkan!");
+
+        if (!name) {
+            showToast("Nama kategori tidak boleh kosong.", "error");
+            return;
+        }
+
+        router.post('/product-categories', {
+            name,
+            parent_id: parentId,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                if (level === 1) setNewCatL1Name('');
+                if (level === 2) setNewCatL2Name('');
+                if (level === 3) setNewCatL3Name('');
+                showToast("Kategori baru berhasil ditambahkan!");
+            },
+            onError: (errors) => {
+                showToast(getFirstErrorMessage(errors, "Gagal menambahkan kategori."), "error");
+            }
+        });
     };
 
     const deleteCategory = (level, id) => {
@@ -1027,30 +1037,22 @@ export default function Dashboard({ databaseBrands }) {
             title: title,
             message: msg,
             onConfirm: () => {
-                if (level === 1) {
-                    setCategories(categories.filter(c => c.id !== id));
-                    if (selectedCatL1 === id) { setSelectedCatL1(null); setSelectedCatL2(null); }
-                } else if (level === 2) {
-                    const updatedCats = categories.map(c1 => {
-                        if (c1.id === selectedCatL1) return { ...c1, subCategories: c1.subCategories.filter(c2 => c2.id !== id) };
-                        return c1;
-                    });
-                    setCategories(updatedCats);
-                    if (selectedCatL2 === id) setSelectedCatL2(null);
-                } else if (level === 3) {
-                    const updatedCats = categories.map(c1 => {
-                        if (c1.id === selectedCatL1) {
-                            const updatedSub = c1.subCategories.map(c2 => {
-                                if (c2.id === selectedCatL2) return { ...c2, subSubCategories: c2.subSubCategories.filter(c3 => c3.id !== id) };
-                                return c2;
-                            });
-                            return { ...c1, subCategories: updatedSub };
+                router.delete(`/product-categories/${id}`, {
+                    preserveState: true,
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        if (level === 1 && selectedCatL1 === id) {
+                            setSelectedCatL1(null);
+                            setSelectedCatL2(null);
+                        } else if (level === 2 && selectedCatL2 === id) {
+                            setSelectedCatL2(null);
                         }
-                        return c1;
-                    });
-                    setCategories(updatedCats);
-                }
-                showToast("Kategori berhasil dihapus!");
+                        showToast("Kategori berhasil dihapus!");
+                    },
+                    onError: (errors) => {
+                        showToast(getFirstErrorMessage(errors, "Gagal menghapus kategori."), "error");
+                    }
+                });
             }
         });
     };
