@@ -450,8 +450,11 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             title: "Keluar Sistem?",
             message: "Sesi Anda akan diakhiri dan harus login kembali untuk mengakses halaman ini. Lanjutkan?",
             onConfirm: () => {
-                showToast("Berhasil logout dari sistem!");
-                // Logika untuk redirect ke halaman login / hapus token ditempatkan di sini
+                router.post('/logout', {}, {
+                    onError: () => {
+                        showToast("Gagal logout. Silakan coba lagi.", "error");
+                    }
+                });
             }
         });
     };
@@ -3053,7 +3056,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                         </div>
                         <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
                             <button onClick={() => setConfirmObj({ ...confirmObj, isOpen: false })} className="flex-1 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 text-sm">Batal</button>
-                            <button onClick={() => { confirmObj.onConfirm(); setConfirmObj({ ...confirmObj, isOpen: false }); }} className="flex-1 py-2.5 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-all shadow-sm active:scale-95 text-sm">Ya, Lanjutkan</button>
+                            <button onClick={() => { confirmObj.onConfirm?.(); setConfirmObj({ ...confirmObj, isOpen: false }); }} className="flex-1 py-2.5 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-all shadow-sm active:scale-95 text-sm">Ya, Lanjutkan</button>
                         </div>
                     </div>
                 </div>

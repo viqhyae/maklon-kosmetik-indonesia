@@ -8,7 +8,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 
 export default function Login({ status, canResetPassword }) {
     const { data, setData, post, processing, errors, reset } = useForm({
-        email: '',
+        login: '',
         password: '',
         remember: false,
     });
@@ -23,33 +23,38 @@ export default function Login({ status, canResetPassword }) {
 
     return (
         <GuestLayout>
-            <Head title="Log in" />
+            <Head title="Login" />
 
             {status && (
-                <div className="mb-4 text-sm font-medium text-green-600">
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
                     {status}
                 </div>
             )}
 
-            <form onSubmit={submit}>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-slate-800">Masuk ke Dashboard</h1>
+                <p className="mt-1 text-sm text-slate-500">Gunakan username atau email dan password Anda.</p>
+            </div>
+
+            <form onSubmit={submit} className="space-y-4">
                 <div>
-                    <InputLabel htmlFor="email" value="Email" />
+                    <InputLabel htmlFor="login" value="Username / Email" />
 
                     <TextInput
-                        id="email"
-                        type="email"
-                        name="email"
-                        value={data.email}
+                        id="login"
+                        type="text"
+                        name="login"
+                        value={data.login}
                         className="mt-1 block w-full"
                         autoComplete="username"
                         isFocused={true}
-                        onChange={(e) => setData('email', e.target.value)}
+                        onChange={(e) => setData('login', e.target.value)}
                     />
 
-                    <InputError message={errors.email} className="mt-2" />
+                    <InputError message={errors.login} className="mt-2" />
                 </div>
 
-                <div className="mt-4">
+                <div>
                     <InputLabel htmlFor="password" value="Password" />
 
                     <TextInput
@@ -65,7 +70,7 @@ export default function Login({ status, canResetPassword }) {
                     <InputError message={errors.password} className="mt-2" />
                 </div>
 
-                <div className="mt-4 block">
+                <div className="block">
                     <label className="flex items-center">
                         <Checkbox
                             name="remember"
@@ -80,7 +85,7 @@ export default function Login({ status, canResetPassword }) {
                     </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end">
+                <div className="flex items-center justify-between gap-4 pt-2">
                     {canResetPassword && (
                         <Link
                             href={route('password.request')}
@@ -90,10 +95,17 @@ export default function Login({ status, canResetPassword }) {
                         </Link>
                     )}
 
-                    <PrimaryButton className="ms-4" disabled={processing}>
+                    <PrimaryButton className="ms-auto bg-[#C1986E] hover:bg-[#A37E58] focus:bg-[#A37E58] active:bg-[#8f6b4b]" disabled={processing}>
                         Log in
                     </PrimaryButton>
                 </div>
+
+                {/* <p className="pt-1 text-sm text-slate-500">
+                    Belum punya akun?{' '}
+                    <Link href={route('register')} className="font-semibold text-[#C1986E] hover:text-[#A37E58]">
+                        Daftar di sini
+                    </Link>
+                </p> */}
             </form>
         </GuestLayout>
     );
