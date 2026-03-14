@@ -21,7 +21,12 @@ class BrandController extends Controller {
             'owner_name' => 'nullable|string',
             'description' => 'nullable|string',
             'logo' => 'nullable|image|max:2048', // Maks 2MB
+            'status' => 'nullable|integer|in:0,1',
         ]);
+
+        $data['owner_name'] = isset($data['owner_name']) ? trim($data['owner_name']) : null;
+        $data['description'] = isset($data['description']) ? trim($data['description']) : null;
+        $data['status'] = (int) ($data['status'] ?? 1);
 
         if ($request->hasFile('logo')) {
             $data['logo_url'] = $request->file('logo')->store('logos', 'public');
@@ -37,7 +42,12 @@ class BrandController extends Controller {
             'owner_name' => 'nullable|string',
             'description' => 'nullable|string',
             'logo' => 'nullable|image|max:2048',
+            'status' => 'required|integer|in:0,1',
         ]);
+
+        $data['owner_name'] = isset($data['owner_name']) ? trim($data['owner_name']) : null;
+        $data['description'] = isset($data['description']) ? trim($data['description']) : null;
+        $data['status'] = (int) $data['status'];
 
         if ($request->hasFile('logo')) {
             if ($brand->logo_url) Storage::disk('public')->delete($brand->logo_url); // Hapus logo lama

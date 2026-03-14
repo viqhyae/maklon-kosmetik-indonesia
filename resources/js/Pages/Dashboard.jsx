@@ -480,9 +480,28 @@ export default function Dashboard({ databaseBrands }) {
         { id: 4, name: "Bapak Andi", email: "andi@mensgroom.id", role: "Brand Owner", status: "Aktif" }
     ]);
 
-    const [brands, setBrands] = useState(databaseBrands || []);
+    const normalizeBrandStatus = (status) => (
+        status === 1 || status === '1' || status === true || status === 'Aktif' ? 1 : 0
+    );
+    const getBrandStatusLabel = (status) => normalizeBrandStatus(status) === 1 ? 'Aktif' : 'Non-aktif';
+    const isBrandActive = (status) => normalizeBrandStatus(status) === 1;
+    const createEmptyBrandInput = () => ({ name: '', description: '', owner_name: '', status: 1 });
+    const getFirstErrorMessage = (errors, fallbackMessage) => {
+        const firstError = Object.values(errors || {})[0];
+        if (Array.isArray(firstError)) return firstError[0] || fallbackMessage;
+        return firstError || fallbackMessage;
+    };
+    const normalizeBrandRecord = (brand) => ({
+        ...brand,
+        owner_name: brand.owner_name || '',
+        description: brand.description || '',
+        status: normalizeBrandStatus(brand.status),
+        brand_code: brand.brand_code || brand.code || `ID-${brand.id}`,
+    });
+
+    const [brands, setBrands] = useState((databaseBrands || []).map(normalizeBrandRecord));
     useEffect(() => {
-        setBrands(databaseBrands || []);
+        setBrands((databaseBrands || []).map(normalizeBrandRecord));
     }, [databaseBrands]);
 
     const [categories, setCategories] = useState(INITIAL_CATEGORY_DATA);
@@ -579,7 +598,8 @@ export default function Dashboard({ databaseBrands }) {
     ]);
 
     // --- STATE FORM ---
-    const [brandInput, setBrandInput] = useState({ name: '', description: '', ownerId: '' });
+    const [brandInput, setBrandInput] = useState(createEmptyBrandInput());
+    const [savingBrandStatusId, setSavingBrandStatusId] = useState(null);
     const [logoFile, setLogoFile] = useState(null);
     const [logoPreview, setLogoPreview] = useState(null);
     const [editingBrandId, setEditingBrandId] = useState(null);
@@ -615,52 +635,103 @@ export default function Dashboard({ databaseBrands }) {
     const [statusFilter, setStatusFilter] = useState('Semua Status');
 
     // --- LOGIC HANDLERS BRAND ---
-    const handleToggleBrandStatus = (id) => {
-        setBrands(brands.map(brand => {
-            if (brand.id === id) {
-                const newStatus = brand.status === "Aktif" ? "Non-aktif" : "Aktif";
-                showToast(`Status brand diubah menjadi ${newStatus}`);
-                return { ...brand, status: newStatus };
-            }
-            return brand;
-        }));
+    const closeBrandModal = () => {
+        setBrandInput(createEmptyBrandInput());
+        setLogoFile(null);
+        setLogoPreview(null);
+        setEditingBrandId(null);
+        setIsBrandModalOpen(false);
+    };
+
+    const openCreateBrandModal = () => {
+        closeBrandModal();
+        setIsBrandModalOpen(true);
+    };
+
+    const toggleBrandStatusAutoSave = (brand) => {
+        const previousStatus = normalizeBrandStatus(brand.status);
+        const newStatus = previousStatus === 1 ? 0 : 1;
+
+        setSavingBrandStatusId(brand.id);
+        setBrands((currentBrands) =>
+            currentBrands.map((currentBrand) =>
+                currentBrand.id === brand.id ? { ...currentBrand, status: newStatus } : currentBrand
+            )
+        );
+
+        if (editingBrandId === brand.id) {
+            setBrandInput((currentInput) => ({ ...currentInput, status: newStatus }));
+        }
+
+        router.post(`/brands/update/${brand.id}`, {
+            name: brand.name,
+            owner_name: brand.owner_name || '',
+            description: brand.description || '',
+            status: newStatus,
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                showToast(`Status Brand diubah menjadi ${getBrandStatusLabel(newStatus)}`);
+            },
+            onError: (errors) => {
+                setBrands((currentBrands) =>
+                    currentBrands.map((currentBrand) =>
+                        currentBrand.id === brand.id ? { ...currentBrand, status: previousStatus } : currentBrand
+                    )
+                );
+                if (editingBrandId === brand.id) {
+                    setBrandInput((currentInput) => ({ ...currentInput, status: previousStatus }));
+                }
+                showToast(getFirstErrorMessage(errors, `Gagal mengubah status ${brand.name}.`), "error");
+            },
+            onFinish: () => setSavingBrandStatusId(null),
+        });
     };
 
     const handleSaveBrand = (e) => {
         e.preventDefault();
-        if (!brandInput.name) return;
+        const brandName = brandInput.name.trim();
 
-        // Bikin FormData karena kita mau kirim file (Gambar)
+        if (!brandName) {
+            showToast("Nama brand wajib diisi.", "error");
+            return;
+        }
+
         const formData = new FormData();
-        formData.append('name', brandInput.name);
-        formData.append('owner_name', brandInput.ownerId ? brandInput.ownerId.toString() : '');
-        formData.append('description', brandInput.description || "-");
+        formData.append('name', brandName);
+        formData.append('owner_name', brandInput.owner_name.trim());
+        formData.append('description', brandInput.description.trim());
+        formData.append('status', String(normalizeBrandStatus(brandInput.status)));
         if (logoFile) {
             formData.append('logo', logoFile);
         }
 
         if (editingBrandId) {
-            // --- FITUR EDIT DATABASE ---
             router.post(`/brands/update/${editingBrandId}`, formData, {
+                preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     showToast("Data brand berhasil diperbarui!");
-                    setBrandInput({ name: '', description: '', ownerId: '' });
-                    setLogoFile(null); setLogoPreview(null);
-                    setEditingBrandId(null);
-                    setIsBrandModalOpen(false);
+                    closeBrandModal();
+                },
+                onError: (errors) => {
+                    showToast(getFirstErrorMessage(errors, "Gagal memperbarui data brand."), "error");
                 }
             });
         } else {
-            // --- FITUR TAMBAH BARU DATABASE ---
             const randomCode = Math.floor(1000 + Math.random() * 9000);
             formData.append('brand_code', `CL-${randomCode}`);
 
             router.post('/brands', formData, {
+                preserveScroll: true,
+                preserveState: true,
                 onSuccess: () => {
                     showToast("Brand baru berhasil ditambahkan!");
-                    setBrandInput({ name: '', description: '', ownerId: '' });
-                    setLogoFile(null); setLogoPreview(null);
-                    setIsBrandModalOpen(false);
+                    closeBrandModal();
+                },
+                onError: (errors) => {
+                    showToast(getFirstErrorMessage(errors, "Gagal menambahkan brand baru."), "error");
                 }
             });
         }
@@ -668,11 +739,14 @@ export default function Dashboard({ databaseBrands }) {
 
     const handleEditBrand = (brand) => {
         setBrandInput({
-            name: brand.name,
-            description: brand.description === "-" ? "" : brand.description,
-            ownerId: brand.ownerId || ''
+            name: brand.name || '',
+            description: brand.description === "-" ? "" : (brand.description || ''),
+            owner_name: brand.owner_name || '',
+            status: normalizeBrandStatus(brand.status),
         });
         setEditingBrandId(brand.id);
+        setLogoFile(null);
+        setLogoPreview(brand.logo_url ? `/storage/${brand.logo_url}` : null);
         setIsBrandModalOpen(true);
     };
 
@@ -693,9 +767,7 @@ export default function Dashboard({ databaseBrands }) {
     };
 
     const handleCancelEditBrand = () => {
-        setBrandInput({ name: '', description: '', ownerId: '' });
-        setEditingBrandId(null);
-        setIsBrandModalOpen(false);
+        closeBrandModal();
     };
 
     // --- LOGIC HANDLERS PRODUCT ---
@@ -1071,14 +1143,15 @@ export default function Dashboard({ databaseBrands }) {
     const BrandManager = () => {
         const filteredBrands = brands.filter(b =>
             b.name.toLowerCase().includes(globalSearch.toLowerCase()) ||
-            (b.code && b.code.toLowerCase().includes(globalSearch.toLowerCase())) ||
+            (b.brand_code && b.brand_code.toLowerCase().includes(globalSearch.toLowerCase())) ||
+            (b.owner_name && b.owner_name.toLowerCase().includes(globalSearch.toLowerCase())) ||
             (b.description && b.description.toLowerCase().includes(globalSearch.toLowerCase()))
         ).sort((a, b) => {
             const dir = brandSort.direction === 'asc' ? 1 : -1;
             if (brandSort.key === 'name') return a.name.localeCompare(b.name) * dir;
             if (brandSort.key === 'status') {
                 if (a.status === b.status) return 0;
-                return (a.status === 'Aktif' ? -1 : 1) * dir;
+                return (normalizeBrandStatus(a.status) === 1 ? -1 : 1) * dir;
             }
             if (brandSort.key === 'sku') {
                 const countA = products.filter(p => Number(p.brandId) === a.id).length;
@@ -1086,8 +1159,8 @@ export default function Dashboard({ databaseBrands }) {
                 return (countA - countB) * dir;
             }
             if (brandSort.key === 'owner') {
-                const ownerA = systemUsers.find(u => u.id === a.ownerId)?.name || '';
-                const ownerB = systemUsers.find(u => u.id === b.ownerId)?.name || '';
+                const ownerA = a.owner_name || '';
+                const ownerB = b.owner_name || '';
                 return ownerA.localeCompare(ownerB) * dir;
             }
             return (a.id - b.id) * dir;
@@ -1102,11 +1175,7 @@ export default function Dashboard({ databaseBrands }) {
                         <span className="text-sm font-medium text-slate-500">Total: {filteredBrands.length} Brand Terdaftar</span>
                     </div>
                     <button
-                        onClick={() => {
-                            setEditingBrandId(null);
-                            setBrandInput({ name: '', description: '', ownerId: '' });
-                            setIsBrandModalOpen(true);
-                        }}
+                        onClick={openCreateBrandModal}
                         className="bg-[#C1986E] hover:bg-[#A37E58] text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-sm active:scale-95 text-sm flex items-center justify-center gap-2"
                     >
                         <Plus size={16} /> Tambah Brand Baru
@@ -1138,30 +1207,35 @@ export default function Dashboard({ databaseBrands }) {
                             ) : (
                                 filteredBrands.map((brand) => {
                                     const productCount = products.filter(p => Number(p.brandId) === brand.id).length;
-                                    const owner = systemUsers.find(u => u.id === brand.ownerId);
+                                    const ownerName = brand.owner_name || '';
 
                                     return (
-                                        <tr key={brand.id} className={`transition-colors ${brand.status === 'Aktif' ? 'hover:bg-slate-50' : 'bg-slate-50/50 grayscale-[20%]'}`}>
+                                        <tr key={brand.id} className={`transition-colors ${isBrandActive(brand.status) ? 'hover:bg-slate-50' : 'bg-slate-50/50 grayscale-[20%]'}`}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 overflow-hidden border border-slate-200">
-                                                        <ImageIcon size={18} />
+                                                        {brand.logo_url ? (
+                                                            <img
+                                                                src={`/storage/${brand.logo_url}`}
+                                                                alt="Logo"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <ImageIcon size={18} />
+                                                        )}
                                                     </div>
                                                     <div>
-                                                        <p className={`font-medium text-sm ${brand.status === 'Aktif' ? 'text-slate-800' : 'text-slate-500'}`}>{brand.name}</p>
+                                                        <p className={`font-medium text-sm ${isBrandActive(brand.status) ? 'text-slate-800' : 'text-slate-500'}`}>{brand.name}</p>
                                                         <p className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded inline-block mt-0.5">
-                                                            {brand.code || `ID-${brand.id}`}
+                                                            {brand.brand_code || `ID-${brand.id}`}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-600">
-                                                {owner ? (
+                                                {ownerName ? (
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">
-                                                            {owner.name.charAt(0)}
-                                                        </div>
-                                                        <span>{owner.name}</span>
+                                                        <span>{ownerName}</span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-slate-400 italic">Belum ditetapkan</span>
@@ -1173,7 +1247,7 @@ export default function Dashboard({ databaseBrands }) {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                {brand.status === "Aktif" ? (
+                                                {isBrandActive(brand.status) ? (
                                                     <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full flex items-center gap-1 w-fit">
                                                         <CheckCircle2 size={12} /> Aktif
                                                     </span>
@@ -1185,10 +1259,11 @@ export default function Dashboard({ databaseBrands }) {
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    <Tooltip text={brand.status === "Aktif" ? "Nonaktifkan Brand" : "Aktifkan Brand"} position="top">
+                                                    <Tooltip text={isBrandActive(brand.status) ? "Nonaktifkan Brand" : "Aktifkan Brand"} position="top">
                                                         <ToggleSwitch
-                                                            checked={brand.status === 'Aktif'}
-                                                            onChange={() => handleToggleBrandStatus(brand.id)}
+                                                            checked={isBrandActive(brand.status)}
+                                                            disabled={savingBrandStatusId === brand.id}
+                                                            onChange={() => toggleBrandStatusAutoSave(brand)}
                                                         />
                                                     </Tooltip>
                                                     <Tooltip text="Edit Brand" position="top">
@@ -1285,12 +1360,12 @@ export default function Dashboard({ databaseBrands }) {
                                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Pemilik Brand (Brand Owner)</label>
                                                 <select
                                                     className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] bg-white text-sm"
-                                                    value={brandInput.ownerId}
-                                                    onChange={(e) => setBrandInput({ ...brandInput, ownerId: e.target.value })}
+                                                    value={brandInput.owner_name}
+                                                    onChange={(e) => setBrandInput({ ...brandInput, owner_name: e.target.value })}
                                                 >
                                                     <option value="">-- Pilih Pemilik (Opsional) --</option>
                                                     {systemUsers.filter(u => u.role === "Brand Owner").map(user => (
-                                                        <option key={user.id} value={user.id}>{user.name} ({user.email})</option>
+                                                        <option key={user.id} value={user.name}>{user.name} ({user.email})</option>
                                                     ))}
                                                 </select>
                                                 <p className="text-[10px] text-slate-400">Pilih pengguna yang akan memiliki akses ke data analitik brand ini.</p>
@@ -1634,7 +1709,7 @@ export default function Dashboard({ databaseBrands }) {
                                                 required
                                             >
                                                 <option value="" disabled>-- Pilih Brand Terdaftar --</option>
-                                                {brands.filter(b => b.status === "Aktif").map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                                {brands.filter(b => isBrandActive(b.status)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                             </select>
                                         </div>
                                     </div>
