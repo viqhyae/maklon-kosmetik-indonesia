@@ -41,6 +41,8 @@ class RegisteredUserController extends Controller
             'name' => trim($validated['name']),
             'email' => strtolower(trim($validated['email'])),
             'password' => Hash::make($validated['password']),
+            'role' => 'Brand Owner',
+            'status' => 1,
         ]);
 
         event(new Registered($user));

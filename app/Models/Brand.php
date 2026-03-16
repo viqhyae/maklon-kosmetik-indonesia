@@ -10,4 +10,15 @@ class Brand extends Model {
     protected $casts = [
         'status' => 'integer',
     ];
+
+    public function setLogoUrlAttribute($value): void
+    {
+        $normalized = trim((string) ($value ?? ''));
+        if ($normalized === '' || in_array(strtolower($normalized), ['0', 'null', 'undefined', 'false'], true)) {
+            $this->attributes['logo_url'] = null;
+            return;
+        }
+
+        $this->attributes['logo_url'] = $normalized;
+    }
 }

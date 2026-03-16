@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import {
     LayoutDashboard,
     Building2,
@@ -53,7 +53,7 @@ import {
     Droplets,
     Sparkles
 } from 'lucide-react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { createPortal } from 'react-dom';
 // Import QRCode untuk generate QR berbasis Vektor (SVG)
@@ -397,7 +397,8 @@ const LeafletMap = () => {
     );
 };
 
-export default function Dashboard({ databaseBrands, databaseCategories }) {
+export default function Dashboard({ databaseBrands, databaseCategories, databaseUsers }) {
+    const authUser = usePage().props?.auth?.user || null;
     const [activeTab, setActiveTab] = useState('dashboard');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMasterDataOpen, setIsMasterDataOpen] = useState(true);
@@ -477,16 +478,178 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     // --- STATE DATA ---
-    const [systemUsers, setSystemUsers] = useState([
-        { id: 1, name: "Admin Utama", email: "admin@mki.co.id", role: "Super Admin", status: "Aktif" },
-        { id: 2, name: "Bapak Owner", email: "owner@mki.co.id", role: "Brand Owner", status: "Aktif" },
-        { id: 3, name: "Ibu Clara", email: "clara@glowco.id", role: "Brand Owner", status: "Aktif" },
-        { id: 4, name: "Bapak Andi", email: "andi@mensgroom.id", role: "Brand Owner", status: "Aktif" }
-    ]);
-
     const normalizeBrandStatus = (status) => (
         status === 1 || status === '1' || status === true || status === 'Aktif' ? 1 : 0
     );
+    const normalizeUserStatus = (status) => (
+        status === 1 || status === '1' || status === true || status === 'Aktif' ? 1 : 0
+    );
+    const isUserActive = (status) => normalizeUserStatus(status) === 1;
+    const normalizeUserRole = (role) => role === 'Super Admin' ? 'Super Admin' : 'Brand Owner';
+    const normalizeUserRecord = (user) => ({
+        ...user,
+        name: user?.name || '',
+        email: user?.email || '',
+        role: normalizeUserRole(user?.role),
+        status: normalizeUserStatus(user?.status),
+    });
+    const createEmptyUserInput = () => ({ name: '', email: '', role: 'Brand Owner', password: '', status: 1 });
+    const normalizeComparableId = (value) => String(value ?? '');
+    const isSameEntityId = (left, right) => normalizeComparableId(left) === normalizeComparableId(right);
+    const generateTempNumericId = () => (Date.now() * 1000) + Math.floor(Math.random() * 1000);
+    const getUserInitials = (fullName) => {
+        const words = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return 'U';
+        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+        return (words[0][0] + words[1][0]).toUpperCase();
+    };
+
+    const syncBrandsFromUserMutation = (currentBrands, oldName, newName, oldRole, newRole) => {
+        const safeOldName = (oldName || '').trim();
+        const safeNewName = (newName || '').trim();
+        const wasBrandOwner = normalizeUserRole(oldRole) === 'Brand Owner';
+        const isBrandOwner = normalizeUserRole(newRole) === 'Brand Owner';
+
+        let nextBrands = currentBrands;
+
+        if (safeOldName !== '' && safeOldName !== safeNewName) {
+            nextBrands = nextBrands.map((brand) =>
+                (brand.owner_name || '').trim() === safeOldName
+                    ? { ...brand, owner_name: safeNewName }
+                    : brand
+            );
+        }
+
+        if (wasBrandOwner && !isBrandOwner && safeNewName !== '') {
+            nextBrands = nextBrands.map((brand) =>
+                (brand.owner_name || '').trim() === safeNewName
+                    ? { ...brand, owner_name: '' }
+                    : brand
+            );
+        }
+
+        return nextBrands;
+    };
+
+    const detachBrandsFromDeletedOwner = (currentBrands, ownerName, ownerRole) => {
+        const safeOwnerName = (ownerName || '').trim();
+        if (safeOwnerName === '' || normalizeUserRole(ownerRole) !== 'Brand Owner') {
+            return currentBrands;
+        }
+
+        return currentBrands.map((brand) =>
+            (brand.owner_name || '').trim() === safeOwnerName
+                ? { ...brand, owner_name: '' }
+                : brand
+        );
+    };
+
+    const insertCategoryNode = (currentCategories, level, parentId, categoryNode) => {
+        if (level === 1) {
+            return [
+                ...currentCategories,
+                {
+                    id: categoryNode.id,
+                    name: categoryNode.name,
+                    subCategories: [],
+                },
+            ];
+        }
+
+        if (level === 2) {
+            return currentCategories.map((catL1) => {
+                if (!isSameEntityId(catL1.id, parentId)) return catL1;
+
+                return {
+                    ...catL1,
+                    subCategories: [
+                        ...(catL1.subCategories || []),
+                        {
+                            id: categoryNode.id,
+                            name: categoryNode.name,
+                            subSubCategories: [],
+                        },
+                    ],
+                };
+            });
+        }
+
+        return currentCategories.map((catL1) => ({
+            ...catL1,
+            subCategories: (catL1.subCategories || []).map((catL2) => {
+                if (!isSameEntityId(catL2.id, parentId)) return catL2;
+
+                return {
+                    ...catL2,
+                    subSubCategories: [
+                        ...(catL2.subSubCategories || []),
+                        {
+                            id: categoryNode.id,
+                            name: categoryNode.name,
+                        },
+                    ],
+                };
+            }),
+        }));
+    };
+
+    const replaceCategoryNodeId = (currentCategories, level, tempId, savedCategory) => {
+        const savedId = Number(savedCategory.id);
+        const savedName = savedCategory.name;
+
+        if (level === 1) {
+            return currentCategories.map((catL1) =>
+                isSameEntityId(catL1.id, tempId)
+                    ? { ...catL1, id: savedId, name: savedName }
+                    : catL1
+            );
+        }
+
+        if (level === 2) {
+            return currentCategories.map((catL1) => ({
+                ...catL1,
+                subCategories: (catL1.subCategories || []).map((catL2) =>
+                    isSameEntityId(catL2.id, tempId)
+                        ? { ...catL2, id: savedId, name: savedName }
+                        : catL2
+                ),
+            }));
+        }
+
+        return currentCategories.map((catL1) => ({
+            ...catL1,
+            subCategories: (catL1.subCategories || []).map((catL2) => ({
+                ...catL2,
+                subSubCategories: (catL2.subSubCategories || []).map((catL3) =>
+                    isSameEntityId(catL3.id, tempId)
+                        ? { ...catL3, id: savedId, name: savedName }
+                        : catL3
+                ),
+            })),
+        }));
+    };
+
+    const removeCategoryNode = (currentCategories, level, categoryId) => {
+        if (level === 1) {
+            return currentCategories.filter((catL1) => !isSameEntityId(catL1.id, categoryId));
+        }
+
+        if (level === 2) {
+            return currentCategories.map((catL1) => ({
+                ...catL1,
+                subCategories: (catL1.subCategories || []).filter((catL2) => !isSameEntityId(catL2.id, categoryId)),
+            }));
+        }
+
+        return currentCategories.map((catL1) => ({
+            ...catL1,
+            subCategories: (catL1.subCategories || []).map((catL2) => ({
+                ...catL2,
+                subSubCategories: (catL2.subSubCategories || []).filter((catL3) => !isSameEntityId(catL3.id, categoryId)),
+            })),
+        }));
+    };
+
     const getBrandStatusLabel = (status) => normalizeBrandStatus(status) === 1 ? 'Aktif' : 'Non-aktif';
     const isBrandActive = (status) => normalizeBrandStatus(status) === 1;
     const createEmptyBrandInput = () => ({ name: '', description: '', owner_name: '', status: 1 });
@@ -499,9 +662,70 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
         ...brand,
         owner_name: brand.owner_name || '',
         description: brand.description || '',
+        logo_url: brand.logo_url || brand.logo_public_url || '',
         status: normalizeBrandStatus(brand.status),
         brand_code: brand.brand_code || brand.code || `ID-${brand.id}`,
+        updated_at: brand.updated_at || null,
     });
+    const buildBrandLogoUrl = (logoUrl) => {
+        if (!logoUrl || typeof logoUrl !== 'string') return null;
+
+        const trimmed = logoUrl.trim();
+        if (!trimmed) return null;
+        if (['0', 'null', 'undefined', 'false'].includes(trimmed.toLowerCase())) {
+            return null;
+        }
+
+        if (trimmed.startsWith('blob:') || trimmed.startsWith('data:image/')) {
+            return trimmed;
+        }
+
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            try {
+                const parsed = new URL(trimmed);
+                if (parsed.pathname.startsWith('/storage/')) {
+                    return `${parsed.pathname}${parsed.search}`;
+                }
+
+                const storageIdx = parsed.pathname.indexOf('/storage/');
+                if (storageIdx >= 0) {
+                    return `${parsed.pathname.slice(storageIdx)}${parsed.search}`;
+                }
+            } catch {
+                return trimmed;
+            }
+
+            return trimmed;
+        }
+
+        let normalized = trimmed.replaceAll('\\', '/').replace(/^\/+/, '');
+        if (normalized.startsWith('public/')) {
+            normalized = normalized.slice('public/'.length);
+        }
+        if (normalized.startsWith('storage/')) {
+            return `/${normalized}`;
+        }
+
+        return `/storage/${normalized}`;
+    };
+    const buildBrandLogoSrc = (brand) => buildBrandLogoUrl(brand?.logo_url || brand?.logo_public_url);
+    const logoPreviewObjectUrlRef = useRef(null);
+    const releaseLogoPreviewObjectUrl = () => {
+        if (logoPreviewObjectUrlRef.current) {
+            URL.revokeObjectURL(logoPreviewObjectUrlRef.current);
+            logoPreviewObjectUrlRef.current = null;
+        }
+    };
+    const setLogoPreviewFromServer = (logoUrl) => {
+        releaseLogoPreviewObjectUrl();
+        setLogoPreview(buildBrandLogoUrl(logoUrl));
+    };
+    const setLogoPreviewFromFile = (file) => {
+        releaseLogoPreviewObjectUrl();
+        const objectUrl = URL.createObjectURL(file);
+        logoPreviewObjectUrlRef.current = objectUrl;
+        setLogoPreview(objectUrl);
+    };
 
     const [brands, setBrands] = useState((databaseBrands || []).map(normalizeBrandRecord));
     useEffect(() => {
@@ -514,6 +738,21 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     useEffect(() => {
         setCategories(Array.isArray(databaseCategories) ? databaseCategories : INITIAL_CATEGORY_DATA);
     }, [databaseCategories]);
+
+    const [systemUsers, setSystemUsers] = useState((databaseUsers || []).map(normalizeUserRecord));
+    useEffect(() => {
+        setSystemUsers((databaseUsers || []).map(normalizeUserRecord));
+    }, [databaseUsers]);
+
+    const authUserId = authUser?.id;
+    const authUserEmail = String(authUser?.email || '').trim().toLowerCase();
+    const matchedSystemUser = systemUsers.find((user) =>
+        (authUserId != null && isSameEntityId(user.id, authUserId)) ||
+        (authUserEmail !== '' && String(user.email || '').trim().toLowerCase() === authUserEmail)
+    );
+    const sidebarUserName = (authUser?.name || matchedSystemUser?.name || 'Pengguna').trim() || 'Pengguna';
+    const sidebarUserRole = normalizeUserRole(authUser?.role || matchedSystemUser?.role);
+    const sidebarUserInitials = getUserInitials(sidebarUserName);
 
     const [products, setProducts] = useState([
         {
@@ -612,10 +851,14 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     const [logoFile, setLogoFile] = useState(null);
     const [logoPreview, setLogoPreview] = useState(null);
     const [editingBrandId, setEditingBrandId] = useState(null);
+    const [brokenBrandLogoIds, setBrokenBrandLogoIds] = useState([]);
 
-    const [userInput, setUserInput] = useState({ name: '', email: '', role: 'Brand Owner', password: '' });
+    const [userInput, setUserInput] = useState(createEmptyUserInput());
     const [editingUserId, setEditingUserId] = useState(null);
+    const [isSavingUser, setIsSavingUser] = useState(false);
+    const [pendingUserActionIds, setPendingUserActionIds] = useState([]);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [isSavingPassword, setIsSavingPassword] = useState(false);
     const [passwordData, setPasswordData] = useState({ userId: null, userName: '', newPassword: '', confirmPassword: '' });
 
     const [tagConfig, setTagConfig] = useState({
@@ -635,6 +878,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     const [newCatL1Name, setNewCatL1Name] = useState('');
     const [newCatL2Name, setNewCatL2Name] = useState('');
     const [newCatL3Name, setNewCatL3Name] = useState('');
+    const [isSavingCategory, setIsSavingCategory] = useState(false);
 
     // --- STATE PENGATURAN ---
     const [requireGps, setRequireGps] = useState(true);
@@ -642,9 +886,65 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
 
     // --- STATE UNTUK FILTER SCAN ---
     const [statusFilter, setStatusFilter] = useState('Semua Status');
+    const brandSubmitLockRef = useRef(false);
+    const userSubmitLockRef = useRef(false);
+    const categorySubmitLockRef = useRef(false);
+
+    const transitionSetBrands = (updater) => {
+        startTransition(() => {
+            setBrands(updater);
+        });
+    };
+    const transitionSetUsers = (updater) => {
+        startTransition(() => {
+            setSystemUsers(updater);
+        });
+    };
+    const transitionSetCategories = (updater) => {
+        startTransition(() => {
+            setCategories(updater);
+        });
+    };
+    const markBrandLogoBroken = (brandId) => {
+        setBrokenBrandLogoIds((currentIds) => (
+            currentIds.includes(brandId) ? currentIds : [...currentIds, brandId]
+        ));
+    };
+    const clearBrokenBrandLogo = (brandId) => {
+        setBrokenBrandLogoIds((currentIds) => currentIds.filter((id) => id !== brandId));
+    };
+
+    const setUserPendingAction = (userId, isPending) => {
+        const key = normalizeComparableId(userId);
+
+        setPendingUserActionIds((currentIds) => {
+            const alreadyPending = currentIds.includes(key);
+            if (isPending) {
+                return alreadyPending ? currentIds : [...currentIds, key];
+            }
+
+            if (!alreadyPending) {
+                return currentIds;
+            }
+
+            return currentIds.filter((id) => id !== key);
+        });
+    };
+
+    const isUserPendingAction = (userId) => pendingUserActionIds.includes(normalizeComparableId(userId));
+
+    useEffect(() => {
+        return () => {
+            releaseLogoPreviewObjectUrl();
+        };
+    }, []);
 
     // --- LOGIC HANDLERS BRAND ---
+    const [isSavingBrand, setIsSavingBrand] = useState(false);
     const closeBrandModal = () => {
+        brandSubmitLockRef.current = false;
+        setIsSavingBrand(false);
+        releaseLogoPreviewObjectUrl();
         setBrandInput(createEmptyBrandInput());
         setLogoFile(null);
         setLogoPreview(null);
@@ -653,6 +953,8 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const openCreateBrandModal = () => {
+        brandSubmitLockRef.current = false;
+        setIsSavingBrand(false);
         closeBrandModal();
         setIsBrandModalOpen(true);
     };
@@ -672,12 +974,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             setBrandInput((currentInput) => ({ ...currentInput, status: newStatus }));
         }
 
-        axios.post(`/brands/update/${brand.id}`, {
-            name: brand.name,
-            owner_name: brand.owner_name || '',
-            description: brand.description || '',
-            status: newStatus,
-        })
+        axios.post(`/brands/${brand.id}/status`, { status: newStatus })
             .then((response) => {
                 const savedBrand = normalizeBrandRecord(response?.data?.brand || { ...brand, status: newStatus });
 
@@ -719,6 +1016,8 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
 
     const handleSaveBrand = (e) => {
         e.preventDefault();
+        if (brandSubmitLockRef.current || isSavingBrand) return;
+
         const brandName = brandInput.name.trim();
 
         if (!brandName) {
@@ -726,42 +1025,54 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('name', brandName);
-        formData.append('owner_name', brandInput.owner_name.trim());
-        formData.append('description', brandInput.description.trim());
-        formData.append('status', String(normalizeBrandStatus(brandInput.status)));
-        if (logoFile) {
-            formData.append('logo', logoFile);
-        }
+        brandSubmitLockRef.current = true;
+        setIsSavingBrand(true);
 
         const isEditing = Boolean(editingBrandId);
-
-        if (!isEditing) {
-            const randomCode = Math.floor(1000 + Math.random() * 9000);
-            formData.append('brand_code', `CL-${randomCode}`);
-        }
-
+        const normalizedStatus = normalizeBrandStatus(brandInput.status);
+        const randomCode = Math.floor(1000 + Math.random() * 9000);
+        const createBrandCode = `CL-${randomCode}`;
+        const basePayload = {
+            name: brandName,
+            owner_name: brandInput.owner_name.trim(),
+            description: brandInput.description.trim(),
+            status: normalizedStatus,
+        };
         const targetUrl = isEditing ? `/brands/update/${editingBrandId}` : '/brands';
-
-        axios.post(targetUrl, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        })
+        const payload = logoFile
+            ? (() => {
+                const formData = new FormData();
+                formData.append('name', basePayload.name);
+                formData.append('owner_name', basePayload.owner_name);
+                formData.append('description', basePayload.description);
+                formData.append('status', String(basePayload.status));
+                formData.append('logo', logoFile);
+                formData.append('logo_upload_expected', '1');
+                if (!isEditing) {
+                    formData.append('brand_code', createBrandCode);
+                }
+                return formData;
+            })()
+            : {
+                ...basePayload,
+                ...(isEditing ? {} : { brand_code: createBrandCode }),
+            };
+        axios.post(targetUrl, payload)
             .then((response) => {
                 const savedBrand = normalizeBrandRecord(response?.data?.brand || {});
 
                 if (savedBrand.id) {
                     if (isEditing) {
-                        setBrands((currentBrands) =>
+                        transitionSetBrands((currentBrands) =>
                             currentBrands.map((currentBrand) =>
                                 currentBrand.id === savedBrand.id ? savedBrand : currentBrand
                             )
                         );
                     } else {
-                        setBrands((currentBrands) => [savedBrand, ...currentBrands]);
+                        transitionSetBrands((currentBrands) => [savedBrand, ...currentBrands]);
                     }
+
+                    clearBrokenBrandLogo(savedBrand.id);
                 }
 
                 showToast(isEditing ? "Data brand berhasil diperbarui!" : "Brand baru berhasil ditambahkan!");
@@ -769,14 +1080,24 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             })
             .catch((error) => {
                 const errors = error?.response?.data?.errors || {};
+                if (errors?.logo?.[0]) {
+                    showToast(errors.logo[0], "error");
+                    return;
+                }
                 showToast(
                     getFirstErrorMessage(errors, isEditing ? "Gagal memperbarui data brand." : "Gagal menambahkan brand baru."),
                     "error"
                 );
+            })
+            .finally(() => {
+                brandSubmitLockRef.current = false;
+                setIsSavingBrand(false);
             });
     };
 
     const handleEditBrand = (brand) => {
+        brandSubmitLockRef.current = false;
+        setIsSavingBrand(false);
         setBrandInput({
             name: brand.name || '',
             description: brand.description === "-" ? "" : (brand.description || ''),
@@ -785,7 +1106,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
         });
         setEditingBrandId(brand.id);
         setLogoFile(null);
-        setLogoPreview(brand.logo_url ? `/storage/${brand.logo_url}` : null);
+        setLogoPreviewFromServer(brand.logo_url);
         setIsBrandModalOpen(true);
     };
 
@@ -818,6 +1139,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const handleCancelEditBrand = () => {
+        if (isSavingBrand) return;
         closeBrandModal();
     };
 
@@ -918,61 +1240,294 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     // --- LOGIC HANDLERS USER ---
     const handleSaveUser = (e) => {
         e.preventDefault();
-        if (!userInput.name || !userInput.email) return;
+        if (userSubmitLockRef.current || isSavingUser) return;
 
-        if (editingUserId) {
-            setSystemUsers(systemUsers.map(u => u.id === editingUserId ? { ...u, name: userInput.name, email: userInput.email, role: userInput.role } : u));
-            showToast("Data pengguna berhasil diperbarui!");
-        } else {
-            if (!userInput.password) {
-                showToast("Sandi wajib diisi untuk pengguna baru!", "error");
-                return;
-            }
-            const newUser = { id: Date.now(), name: userInput.name, email: userInput.email, role: userInput.role, status: "Aktif" };
-            setSystemUsers([...systemUsers, newUser]);
-            showToast("Akun pengguna baru berhasil dibuat!");
+        const trimmedName = userInput.name.trim();
+        const trimmedEmail = userInput.email.trim().toLowerCase();
+        const normalizedRole = normalizeUserRole(userInput.role);
+
+        if (!trimmedName || !trimmedEmail) {
+            showToast("Nama dan email wajib diisi.", "error");
+            return;
         }
-        setUserInput({ name: '', email: '', role: 'Brand Owner', password: '' });
+
+        const isEditing = Boolean(editingUserId);
+        const previousUser = isEditing
+            ? systemUsers.find((user) => Number(user.id) === Number(editingUserId))
+            : null;
+
+        if (!isEditing && !userInput.password) {
+            showToast("Sandi wajib diisi untuk pengguna baru!", "error");
+            return;
+        }
+
+        userSubmitLockRef.current = true;
+        setIsSavingUser(true);
+
+        const payload = {
+            name: trimmedName,
+            email: trimmedEmail,
+            role: normalizedRole,
+            status: normalizeUserStatus(userInput.status),
+        };
+
+        const draftInputSnapshot = { ...userInput };
+        const previousUsersSnapshot = systemUsers;
+        const previousBrandsSnapshot = brands;
+        const previousEditingUserId = editingUserId;
+        const previousIsUserModalOpen = isUserModalOpen;
+        const optimisticId = isEditing
+            ? previousUser?.id
+            : generateTempNumericId();
+
+        if (optimisticId === undefined || optimisticId === null) {
+            userSubmitLockRef.current = false;
+            setIsSavingUser(false);
+            showToast("Gagal memproses data pengguna. Silakan coba lagi.", "error");
+            return;
+        }
+
+        const optimisticUser = normalizeUserRecord({
+            ...(previousUser || {}),
+            id: optimisticId,
+            ...payload,
+        });
+
+        setUserPendingAction(optimisticId, true);
+        if (isEditing) {
+            transitionSetUsers((currentUsers) =>
+                currentUsers.map((currentUser) =>
+                    isSameEntityId(currentUser.id, optimisticId) ? optimisticUser : currentUser
+                )
+            );
+
+            if (previousUser) {
+                transitionSetBrands((currentBrands) =>
+                    syncBrandsFromUserMutation(
+                        currentBrands,
+                        previousUser.name,
+                        optimisticUser.name,
+                        previousUser.role,
+                        optimisticUser.role
+                    )
+                );
+            }
+        } else {
+            transitionSetUsers((currentUsers) => [optimisticUser, ...currentUsers]);
+        }
+
+        setUserInput(createEmptyUserInput());
         setEditingUserId(null);
         setIsUserModalOpen(false);
+
+        const request = isEditing
+            ? axios.post(`/users/update/${editingUserId}`, payload)
+            : axios.post('/users', { ...payload, password: userInput.password });
+
+        request
+            .then((response) => {
+                const savedUser = normalizeUserRecord(response?.data?.user || {});
+                if (!savedUser.id) {
+                    throw new Error('USER_RESPONSE_MISSING_ID');
+                }
+
+                transitionSetUsers((currentUsers) =>
+                    currentUsers.map((currentUser) =>
+                        isSameEntityId(currentUser.id, optimisticId) ? savedUser : currentUser
+                    )
+                );
+
+                if (isEditing && previousUser) {
+                    transitionSetBrands((currentBrands) =>
+                        syncBrandsFromUserMutation(
+                            currentBrands,
+                            previousUser.name,
+                            savedUser.name,
+                            previousUser.role,
+                            savedUser.role
+                        )
+                    );
+                }
+
+                showToast(isEditing ? "Data pengguna berhasil diperbarui!" : "Akun pengguna baru berhasil dibuat!");
+            })
+            .catch((error) => {
+                transitionSetUsers(previousUsersSnapshot);
+                transitionSetBrands(previousBrandsSnapshot);
+                setUserInput(draftInputSnapshot);
+                setEditingUserId(previousEditingUserId);
+                setIsUserModalOpen(previousIsUserModalOpen);
+
+                if (error?.message === 'USER_RESPONSE_MISSING_ID') {
+                    showToast("Respons server tidak lengkap. Data pengguna dikembalikan seperti semula.", "error");
+                    return;
+                }
+
+                const errors = error?.response?.data?.errors || {};
+                showToast(
+                    getFirstErrorMessage(errors, isEditing ? "Gagal memperbarui data pengguna." : "Gagal menambahkan pengguna baru."),
+                    "error"
+                );
+            })
+            .finally(() => {
+                setUserPendingAction(optimisticId, false);
+                userSubmitLockRef.current = false;
+                setIsSavingUser(false);
+            });
     };
 
     const handleEditUser = (user) => {
-        setUserInput({ name: user.name, email: user.email, role: user.role, password: '' });
+        if (isUserPendingAction(user.id)) return;
+
+        userSubmitLockRef.current = false;
+        setIsSavingUser(false);
+        setUserInput({
+            name: user.name || '',
+            email: user.email || '',
+            role: normalizeUserRole(user.role),
+            password: '',
+            status: normalizeUserStatus(user.status),
+        });
         setEditingUserId(user.id);
         setIsUserModalOpen(true);
     };
 
     const handleCancelEditUser = () => {
-        setUserInput({ name: '', email: '', role: 'Brand Owner', password: '' });
+        if (isSavingUser) return;
+
+        userSubmitLockRef.current = false;
+        setIsSavingUser(false);
+        setUserInput(createEmptyUserInput());
         setEditingUserId(null);
         setIsUserModalOpen(false);
     };
 
     const handleDeleteUser = (id) => {
+        if (isUserPendingAction(id)) {
+            return;
+        }
+
+        const targetUser = systemUsers.find((user) => isSameEntityId(user.id, id));
+        if (!targetUser) {
+            return;
+        }
+
         setConfirmObj({
             isOpen: true,
             title: "Hapus Akun Pengguna?",
             message: "Pengguna ini tidak akan bisa lagi login ke dalam sistem. Lanjutkan?",
             onConfirm: () => {
-                setSystemUsers(systemUsers.filter(u => u.id !== id));
-                showToast("Akun pengguna berhasil dihapus!");
+                if (isUserPendingAction(id)) {
+                    return;
+                }
+
+                const previousUsersSnapshot = systemUsers;
+                const previousBrandsSnapshot = brands;
+                const previousUserInput = { ...userInput };
+                const previousEditingUserId = editingUserId;
+                const previousIsUserModalOpen = isUserModalOpen;
+
+                setUserPendingAction(id, true);
+                transitionSetUsers((currentUsers) =>
+                    currentUsers.filter((currentUser) => !isSameEntityId(currentUser.id, id))
+                );
+                transitionSetBrands((currentBrands) =>
+                    detachBrandsFromDeletedOwner(currentBrands, targetUser.name, targetUser.role)
+                );
+
+                if (isSameEntityId(editingUserId, id)) {
+                    setUserInput(createEmptyUserInput());
+                    setEditingUserId(null);
+                    setIsUserModalOpen(false);
+                }
+
+                axios.delete(`/users/${id}`)
+                    .then((response) => {
+                        const deletedId = Number(response?.data?.deleted_id || id);
+
+                        transitionSetUsers((currentUsers) =>
+                            currentUsers.filter((currentUser) => Number(currentUser.id) !== deletedId)
+                        );
+
+                        showToast("Akun pengguna berhasil dihapus!");
+                    })
+                    .catch((error) => {
+                        transitionSetUsers(previousUsersSnapshot);
+                        transitionSetBrands(previousBrandsSnapshot);
+                        setUserInput(previousUserInput);
+                        setEditingUserId(previousEditingUserId);
+                        setIsUserModalOpen(previousIsUserModalOpen);
+
+                        const errors = error?.response?.data?.errors || {};
+                        showToast(getFirstErrorMessage(errors, "Gagal menghapus akun pengguna."), "error");
+                    })
+                    .finally(() => {
+                        setUserPendingAction(id, false);
+                    });
             }
         });
     };
 
-    const handleToggleUserStatus = (id) => {
-        setSystemUsers(systemUsers.map(u => {
-            if (u.id === id) {
-                const newStatus = u.status === "Aktif" ? "Non-aktif" : "Aktif";
-                showToast(`Akses pengguna berhasil di-${newStatus.toLowerCase()}`);
-                return { ...u, status: newStatus };
-            }
-            return u;
-        }));
+    const handleToggleUserStatus = (user) => {
+        if (isUserPendingAction(user.id)) {
+            return;
+        }
+
+        const previousStatus = normalizeUserStatus(user.status);
+        const newStatus = previousStatus === 1 ? 0 : 1;
+
+        setUserPendingAction(user.id, true);
+        transitionSetUsers((currentUsers) =>
+            currentUsers.map((currentUser) =>
+                isSameEntityId(currentUser.id, user.id) ? { ...currentUser, status: newStatus } : currentUser
+            )
+        );
+
+        if (isSameEntityId(editingUserId, user.id)) {
+            setUserInput((currentInput) => ({ ...currentInput, status: newStatus }));
+        }
+
+        axios.post(`/users/${user.id}/status`, { status: newStatus })
+            .then((response) => {
+                const savedUser = normalizeUserRecord(response?.data?.user || { ...user, status: newStatus });
+
+                transitionSetUsers((currentUsers) =>
+                    currentUsers.map((currentUser) =>
+                        isSameEntityId(currentUser.id, user.id) ? savedUser : currentUser
+                    )
+                );
+
+                if (isSameEntityId(editingUserId, user.id)) {
+                    setUserInput((currentInput) => ({
+                        ...currentInput,
+                        status: normalizeUserStatus(savedUser.status),
+                    }));
+                }
+
+                showToast(`Akses pengguna berhasil di${isUserActive(savedUser.status) ? 'aktifkan' : 'nonaktifkan'}.`);
+            })
+            .catch((error) => {
+                const errors = error?.response?.data?.errors || {};
+
+                transitionSetUsers((currentUsers) =>
+                    currentUsers.map((currentUser) =>
+                        isSameEntityId(currentUser.id, user.id) ? { ...currentUser, status: previousStatus } : currentUser
+                    )
+                );
+
+                if (isSameEntityId(editingUserId, user.id)) {
+                    setUserInput((currentInput) => ({ ...currentInput, status: previousStatus }));
+                }
+
+                showToast(getFirstErrorMessage(errors, "Gagal mengubah status pengguna."), "error");
+            })
+            .finally(() => {
+                setUserPendingAction(user.id, false);
+            });
     };
 
     const handleOpenPasswordModal = (user) => {
+        setIsSavingPassword(false);
         setPasswordData({ userId: user.id, userName: user.name, newPassword: '', confirmPassword: '' });
         setIsPasswordModalOpen(true);
     };
@@ -983,8 +1538,28 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             showToast("Sandi tidak cocok! Silakan periksa kembali.", "error");
             return;
         }
-        showToast(`Sandi untuk pengguna ${passwordData.userName} berhasil diperbarui!`);
-        setIsPasswordModalOpen(false);
+
+        if (passwordData.newPassword.length < 8) {
+            showToast("Sandi minimal 8 karakter.", "error");
+            return;
+        }
+
+        setIsSavingPassword(true);
+        axios.post(`/users/${passwordData.userId}/reset-password`, {
+            password: passwordData.newPassword,
+            password_confirmation: passwordData.confirmPassword,
+        })
+            .then(() => {
+                showToast(`Sandi untuk pengguna ${passwordData.userName} berhasil diperbarui!`);
+                setIsPasswordModalOpen(false);
+            })
+            .catch((error) => {
+                const errors = error?.response?.data?.errors || {};
+                showToast(getFirstErrorMessage(errors, "Gagal memperbarui sandi pengguna."), "error");
+            })
+            .finally(() => {
+                setIsSavingPassword(false);
+            });
     };
 
     // --- LOGIC CATEGORY & TAGS ---
@@ -1035,6 +1610,10 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const addCategory = (level) => {
+        if (categorySubmitLockRef.current || isSavingCategory) {
+            return;
+        }
+
         let name = '';
         let parentId = null;
 
@@ -1053,6 +1632,34 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             return;
         }
 
+        const tempId = generateTempNumericId();
+        const previousCategoriesSnapshot = categories;
+        const previousSelectedCatL1 = selectedCatL1;
+        const previousSelectedCatL2 = selectedCatL2;
+
+        categorySubmitLockRef.current = true;
+        setIsSavingCategory(true);
+
+        transitionSetCategories((currentCategories) =>
+            insertCategoryNode(currentCategories, level, parentId, {
+                id: tempId,
+                name,
+            })
+        );
+
+        if (level === 1) {
+            setSelectedCatL1(tempId);
+            setSelectedCatL2(null);
+            setNewCatL1Name('');
+        }
+        if (level === 2) {
+            setSelectedCatL2(tempId);
+            setNewCatL2Name('');
+        }
+        if (level === 3) {
+            setNewCatL3Name('');
+        }
+
         axios.post('/product-categories', {
             name,
             parent_id: parentId,
@@ -1060,63 +1667,56 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             .then((response) => {
                 const createdCategory = response?.data?.category;
                 if (!createdCategory?.id) {
-                    showToast("Kategori berhasil ditambahkan, tetapi data respons tidak lengkap.", "error");
-                    return;
+                    throw new Error('CATEGORY_RESPONSE_MISSING_ID');
                 }
 
-                const createdId = Number(createdCategory.id);
-                const createdParentId = createdCategory.parent_id === null ? null : Number(createdCategory.parent_id);
-                const createdName = createdCategory.name;
-                const createdLevel = Number(createdCategory.level || level);
-
-                setCategories((currentCategories) => {
-                    if (createdLevel === 1) {
-                        return [
-                            ...currentCategories,
-                            { id: createdId, name: createdName, subCategories: [] },
-                        ];
-                    }
-
-                    if (createdLevel === 2) {
-                        return currentCategories.map((catL1) => {
-                            if (Number(catL1.id) !== createdParentId) return catL1;
-                            return {
-                                ...catL1,
-                                subCategories: [
-                                    ...(catL1.subCategories || []),
-                                    { id: createdId, name: createdName, subSubCategories: [] },
-                                ],
-                            };
-                        });
-                    }
-
-                    return currentCategories.map((catL1) => ({
-                        ...catL1,
-                        subCategories: (catL1.subCategories || []).map((catL2) => {
-                            if (Number(catL2.id) !== createdParentId) return catL2;
-                            return {
-                                ...catL2,
-                                subSubCategories: [
-                                    ...(catL2.subSubCategories || []),
-                                    { id: createdId, name: createdName },
-                                ],
-                            };
-                        }),
-                    }));
+                transitionSetCategories((currentCategories) => {
+                    const createdLevel = Number(createdCategory.level || level);
+                    return replaceCategoryNodeId(currentCategories, createdLevel, tempId, createdCategory);
                 });
 
-                if (level === 1) setNewCatL1Name('');
-                if (level === 2) setNewCatL2Name('');
-                if (level === 3) setNewCatL3Name('');
+                const createdCategoryId = Number(createdCategory.id);
+                const createdLevel = Number(createdCategory.level || level);
+                if (createdLevel === 1) {
+                    setSelectedCatL1((currentSelected) =>
+                        isSameEntityId(currentSelected, tempId) ? createdCategoryId : currentSelected
+                    );
+                }
+                if (createdLevel === 2) {
+                    setSelectedCatL2((currentSelected) =>
+                        isSameEntityId(currentSelected, tempId) ? createdCategoryId : currentSelected
+                    );
+                }
+
                 showToast("Kategori baru berhasil ditambahkan!");
             })
             .catch((error) => {
+                transitionSetCategories(previousCategoriesSnapshot);
+                setSelectedCatL1(previousSelectedCatL1);
+                setSelectedCatL2(previousSelectedCatL2);
+                if (level === 1) setNewCatL1Name(name);
+                if (level === 2) setNewCatL2Name(name);
+                if (level === 3) setNewCatL3Name(name);
+
+                if (error?.message === 'CATEGORY_RESPONSE_MISSING_ID') {
+                    showToast("Respons server kategori tidak lengkap. Data dikembalikan seperti semula.", "error");
+                    return;
+                }
+
                 const errors = error?.response?.data?.errors || {};
                 showToast(getFirstErrorMessage(errors, "Gagal menambahkan kategori."), "error");
+            })
+            .finally(() => {
+                categorySubmitLockRef.current = false;
+                setIsSavingCategory(false);
             });
     };
 
     const deleteCategory = (level, id) => {
+        if (categorySubmitLockRef.current || isSavingCategory) {
+            return;
+        }
+
         let title = "";
         let msg = "";
         if (level === 1) { title = "Hapus Kategori Utama?"; msg = "Semua sub-kategori di dalamnya akan ikut terhapus permanen."; }
@@ -1128,43 +1728,43 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
             title: title,
             message: msg,
             onConfirm: () => {
+                const previousCategoriesSnapshot = categories;
+                const previousSelectedCatL1 = selectedCatL1;
+                const previousSelectedCatL2 = selectedCatL2;
+
+                categorySubmitLockRef.current = true;
+                setIsSavingCategory(true);
+
+                transitionSetCategories((currentCategories) =>
+                    removeCategoryNode(currentCategories, level, id)
+                );
+                if (level === 1 && isSameEntityId(selectedCatL1, id)) {
+                    setSelectedCatL1(null);
+                    setSelectedCatL2(null);
+                } else if (level === 2 && isSameEntityId(selectedCatL2, id)) {
+                    setSelectedCatL2(null);
+                }
+
                 axios.delete(`/product-categories/${id}`)
                     .then((response) => {
                         const deletedId = Number(response?.data?.deleted_id || id);
-
-                        setCategories((currentCategories) => {
-                            if (level === 1) {
-                                return currentCategories.filter((catL1) => Number(catL1.id) !== deletedId);
-                            }
-
-                            if (level === 2) {
-                                return currentCategories.map((catL1) => ({
-                                    ...catL1,
-                                    subCategories: (catL1.subCategories || []).filter((catL2) => Number(catL2.id) !== deletedId),
-                                }));
-                            }
-
-                            return currentCategories.map((catL1) => ({
-                                ...catL1,
-                                subCategories: (catL1.subCategories || []).map((catL2) => ({
-                                    ...catL2,
-                                    subSubCategories: (catL2.subSubCategories || []).filter((catL3) => Number(catL3.id) !== deletedId),
-                                })),
-                            }));
-                        });
-
-                        if (level === 1 && Number(selectedCatL1) === deletedId) {
-                            setSelectedCatL1(null);
-                            setSelectedCatL2(null);
-                        } else if (level === 2 && Number(selectedCatL2) === deletedId) {
-                            setSelectedCatL2(null);
-                        }
+                        transitionSetCategories((currentCategories) =>
+                            removeCategoryNode(currentCategories, level, deletedId)
+                        );
 
                         showToast("Kategori berhasil dihapus!");
                     })
                     .catch((error) => {
+                        transitionSetCategories(previousCategoriesSnapshot);
+                        setSelectedCatL1(previousSelectedCatL1);
+                        setSelectedCatL2(previousSelectedCatL2);
+
                         const errors = error?.response?.data?.errors || {};
                         showToast(getFirstErrorMessage(errors, "Gagal menghapus kategori."), "error");
+                    })
+                    .finally(() => {
+                        categorySubmitLockRef.current = false;
+                        setIsSavingCategory(false);
                     });
             }
         });
@@ -1256,12 +1856,25 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const BrandManager = () => {
-        const filteredBrands = brands.filter(b =>
-            b.name.toLowerCase().includes(globalSearch.toLowerCase()) ||
-            (b.brand_code && b.brand_code.toLowerCase().includes(globalSearch.toLowerCase())) ||
-            (b.owner_name && b.owner_name.toLowerCase().includes(globalSearch.toLowerCase())) ||
-            (b.description && b.description.toLowerCase().includes(globalSearch.toLowerCase()))
-        ).sort((a, b) => {
+        const searchQuery = globalSearch.toLowerCase().trim();
+        const productCountByBrandId = {};
+
+        for (const product of products) {
+            const brandId = Number(product.brandId);
+            if (!Number.isFinite(brandId)) continue;
+            productCountByBrandId[brandId] = (productCountByBrandId[brandId] || 0) + 1;
+        }
+
+        const filteredBrands = brands.filter((brand) => {
+            if (!searchQuery) return true;
+
+            return (
+                brand.name.toLowerCase().includes(searchQuery) ||
+                (brand.brand_code && brand.brand_code.toLowerCase().includes(searchQuery)) ||
+                (brand.owner_name && brand.owner_name.toLowerCase().includes(searchQuery)) ||
+                (brand.description && brand.description.toLowerCase().includes(searchQuery))
+            );
+        }).sort((a, b) => {
             const dir = brandSort.direction === 'asc' ? 1 : -1;
             if (brandSort.key === 'name') return a.name.localeCompare(b.name) * dir;
             if (brandSort.key === 'status') {
@@ -1269,8 +1882,8 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                 return (normalizeBrandStatus(a.status) === 1 ? -1 : 1) * dir;
             }
             if (brandSort.key === 'sku') {
-                const countA = products.filter(p => Number(p.brandId) === a.id).length;
-                const countB = products.filter(p => Number(p.brandId) === b.id).length;
+                const countA = productCountByBrandId[Number(a.id)] || 0;
+                const countB = productCountByBrandId[Number(b.id)] || 0;
                 return (countA - countB) * dir;
             }
             if (brandSort.key === 'owner') {
@@ -1321,19 +1934,23 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                 <tr><td colSpan="5" className="text-center py-8 text-slate-400 text-sm">Tidak ada brand yang sesuai dengan pencarian.</td></tr>
                             ) : (
                                 filteredBrands.map((brand) => {
-                                    const productCount = products.filter(p => Number(p.brandId) === brand.id).length;
+                                    const productCount = productCountByBrandId[Number(brand.id)] || 0;
                                     const ownerName = brand.owner_name || '';
+                                    const logoSrc = buildBrandLogoSrc(brand);
+                                    const hasBrokenLogo = brokenBrandLogoIds.includes(brand.id);
 
                                     return (
                                         <tr key={brand.id} className={`transition-colors ${isBrandActive(brand.status) ? 'hover:bg-slate-50' : 'bg-slate-50/50 grayscale-[20%]'}`}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 overflow-hidden border border-slate-200">
-                                                        {brand.logo_url ? (
+                                                        {logoSrc && !hasBrokenLogo ? (
                                                             <img
-                                                                src={`/storage/${brand.logo_url}`}
+                                                                src={logoSrc}
                                                                 alt="Logo"
                                                                 className="w-full h-full object-cover"
+                                                                loading="lazy"
+                                                                onError={() => markBrandLogoBroken(brand.id)}
                                                             />
                                                         ) : (
                                                             <ImageIcon size={18} />
@@ -1411,7 +2028,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                 {isBrandModalOpen && (
                     <div
                         className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-                        onClick={handleCancelEditBrand} // Fungsi tutup saat klik background
+                        onClick={() => { if (!isSavingBrand) handleCancelEditBrand(); }} // Fungsi tutup saat klik background
                     >
                         <div
                             className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
@@ -1422,7 +2039,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     {editingBrandId ? <Edit size={18} className="text-[#C1986E]" /> : <Building2 size={18} className="text-[#C1986E]" />}
                                     {editingBrandId ? "Edit Data Brand" : "Registrasi Brand Baru"}
                                 </h3>
-                                <button onClick={handleCancelEditBrand} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95"><X size={18} /></button>
+                                <button disabled={isSavingBrand} onClick={handleCancelEditBrand} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><X size={18} /></button>
                             </div>
 
                             <form onSubmit={handleSaveBrand} className="flex flex-col overflow-hidden">
@@ -1440,7 +2057,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                                     const file = e.target.files[0];
                                                     if (file) {
                                                         setLogoFile(file);
-                                                        setLogoPreview(URL.createObjectURL(file));
+                                                        setLogoPreviewFromFile(file);
                                                     }
                                                 }}
                                             />
@@ -1479,9 +2096,11 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                                     onChange={(e) => setBrandInput({ ...brandInput, owner_name: e.target.value })}
                                                 >
                                                     <option value="">-- Pilih Pemilik (Opsional) --</option>
-                                                    {systemUsers.filter(u => u.role === "Brand Owner").map(user => (
-                                                        <option key={user.id} value={user.name}>{user.name} ({user.email})</option>
-                                                    ))}
+                                                    {systemUsers
+                                                        .filter((user) => normalizeUserRole(user.role) === "Brand Owner" && isUserActive(user.status))
+                                                        .map((user) => (
+                                                        <option key={user.id} value={user.name}>{user.name}</option>
+                                                        ))}
                                                 </select>
                                                 <p className="text-[10px] text-slate-400">Pilih pengguna yang akan memiliki akses ke data analitik brand ini.</p>
                                             </div>
@@ -1500,8 +2119,8 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
-                                    <button type="button" onClick={handleCancelEditBrand} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm">Batal</button>
-                                    <button type="submit" className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm">{editingBrandId ? "Simpan Perubahan" : "Simpan Brand"}</button>
+                                    <button type="button" disabled={isSavingBrand} onClick={handleCancelEditBrand} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm disabled:opacity-40 disabled:cursor-not-allowed">Batal</button>
+                                    <button type="submit" disabled={isSavingBrand} className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingBrand ? "Menyimpan..." : (editingBrandId ? "Simpan Perubahan" : "Simpan Brand")}</button>
                                 </div>
                             </form>
                         </div>
@@ -1512,6 +2131,13 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const CategoryManager = () => {
+        const selectedLevel1Category = categories.find((category) =>
+            isSameEntityId(category.id, selectedCatL1)
+        );
+        const selectedLevel2Category = selectedLevel1Category?.subCategories?.find((subCategory) =>
+            isSameEntityId(subCategory.id, selectedCatL2)
+        );
+
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
                 <PageAlert text="Anda dapat menambah, menghapus, atau mengubah struktur kategori produk. Perubahan di sini akan mempengaruhi formulir input produk secara real-time." />
@@ -1527,16 +2153,18 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                 <input
                                     type="text"
                                     placeholder="Tambah Baru..."
-                                    className="flex-1 text-sm border rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#C1986E] focus:border-[#C1986E]"
+                                    className="flex-1 text-sm border rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#C1986E] focus:border-[#C1986E] disabled:bg-slate-50 disabled:cursor-not-allowed"
                                     value={newCatL1Name}
                                     onChange={(e) => setNewCatL1Name(e.target.value)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') addCategory(1);
                                     }}
+                                    disabled={isSavingCategory}
                                 />
                                 <button
                                     onClick={() => addCategory(1)}
-                                    className="bg-[#C1986E] text-white p-1.5 rounded-lg hover:bg-[#A37E58] transition-all active:scale-95"
+                                    className="bg-[#C1986E] text-white p-1.5 rounded-lg hover:bg-[#A37E58] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={isSavingCategory}
                                 >
                                     <Plus size={18} />
                                 </button>
@@ -1588,19 +2216,19 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && selectedCatL1) addCategory(2);
                                     }}
-                                    disabled={!selectedCatL1}
+                                    disabled={!selectedCatL1 || isSavingCategory}
                                 />
                                 <button
                                     onClick={() => addCategory(2)}
                                     className="bg-[#C1986E] text-white p-1.5 rounded-lg hover:bg-[#A37E58] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={!selectedCatL1}
+                                    disabled={!selectedCatL1 || isSavingCategory}
                                 >
                                     <Plus size={18} />
                                 </button>
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                            {selectedCatL1 && categories.find(c => c.id === selectedCatL1)?.subCategories.map(c2 => (
+                            {selectedCatL1 && selectedLevel1Category?.subCategories.map(c2 => (
                                 <div
                                     key={c2.id}
                                     onClick={() => {
@@ -1640,12 +2268,12 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && selectedCatL1 && selectedCatL2) addCategory(3);
                                     }}
-                                    disabled={!selectedCatL2}
+                                    disabled={!selectedCatL2 || isSavingCategory}
                                 />
                                 <button
                                     onClick={() => addCategory(3)}
                                     className="bg-[#C1986E] text-white p-1.5 rounded-lg hover:bg-[#A37E58] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={!selectedCatL2}
+                                    disabled={!selectedCatL2 || isSavingCategory}
                                 >
                                     <Plus size={18} />
                                 </button>
@@ -1653,7 +2281,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                             {selectedCatL1 && selectedCatL2 &&
-                                categories.find(c => c.id === selectedCatL1)?.subCategories.find(s => s.id === selectedCatL2)?.subSubCategories.map(c3 => (
+                                selectedLevel2Category?.subSubCategories.map(c3 => (
                                     <div
                                         key={c3.id}
                                         className="flex justify-between items-center p-3 rounded-lg text-sm bg-white border border-slate-100 text-slate-700 hover:border-[#C1986E]/30 transition-colors"
@@ -2623,93 +3251,132 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
     };
 
     const UserManager = () => {
-        const filteredUsers = systemUsers.filter(u =>
-            u.name.toLowerCase().includes(globalSearch.toLowerCase()) ||
-            u.email.toLowerCase().includes(globalSearch.toLowerCase()) ||
-            u.role.toLowerCase().includes(globalSearch.toLowerCase())
-        ).sort((a, b) => {
-            const dir = userSort.direction === 'asc' ? 1 : -1;
-            if (userSort.key === 'name') return a.name.localeCompare(b.name) * dir;
-            if (userSort.key === 'role') return a.role.localeCompare(b.role) * dir;
-            if (userSort.key === 'status') {
-                if (a.status === b.status) return 0;
-                return (a.status === 'Aktif' ? -1 : 1) * dir;
-            }
-            return (a.id - b.id) * dir;
-        });
+        const userSearchQuery = globalSearch.toLowerCase().trim();
+        const filteredUsers = systemUsers
+            .filter((user) =>
+                !userSearchQuery ||
+                user.name.toLowerCase().includes(userSearchQuery) ||
+                user.email.toLowerCase().includes(userSearchQuery) ||
+                normalizeUserRole(user.role).toLowerCase().includes(userSearchQuery)
+            )
+            .sort((a, b) => {
+                const dir = userSort.direction === 'asc' ? 1 : -1;
+                if (userSort.key === 'name') return a.name.localeCompare(b.name) * dir;
+                if (userSort.key === 'role') return normalizeUserRole(a.role).localeCompare(normalizeUserRole(b.role)) * dir;
+                if (userSort.key === 'status') return (normalizeUserStatus(a.status) - normalizeUserStatus(b.status)) * dir;
+                const idA = Number(a.id);
+                const idB = Number(b.id);
+                const normalizedIdA = Number.isFinite(idA) ? idA : Number.MIN_SAFE_INTEGER;
+                const normalizedIdB = Number.isFinite(idB) ? idB : Number.MIN_SAFE_INTEGER;
+                return (normalizedIdA - normalizedIdB) * dir;
+            });
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
                 <PageAlert text="Kelola akses pengguna sistem di sini. Klik pada judul kolom di tabel untuk mengurutkan data." />
-                <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
-                    <table className="w-full text-left whitespace-nowrap">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th className="px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('name', userSort, setUserSort)}>
-                                    <div className="flex items-center gap-2">Informasi Pengguna <SortIcon columnKey="name" sortConfig={userSort} /></div>
-                                </th>
-                                <th className="px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('role', userSort, setUserSort)}>
-                                    <div className="flex items-center gap-2">Role Akses <SortIcon columnKey="role" sortConfig={userSort} /></div>
-                                </th>
-                                <th className="px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('status', userSort, setUserSort)}>
-                                    <div className="flex items-center gap-2">Status <SortIcon columnKey="status" sortConfig={userSort} /></div>
-                                </th>
-                                <th className="px-6 py-4 font-semibold text-slate-600 text-sm text-center">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {filteredUsers.map((user) => (
-                                <tr key={user.id} className={`transition-colors ${user.status === 'Aktif' ? 'hover:bg-slate-50' : 'bg-slate-50/50 grayscale-[20%]'}`}>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold ${user.status === 'Aktif' ? 'bg-[#C1986E]/10 text-[#C1986E]' : 'bg-slate-200 text-slate-500'}`}>
-                                                {user.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className={`font-semibold text-sm ${user.status === 'Aktif' ? 'text-slate-800' : 'text-slate-500'}`}>{user.name}</p>
-                                                <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${user.status === 'Aktif' ? (user.role === 'Super Admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700') : 'bg-slate-200 text-slate-600'}`}>
-                                            {user.role}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {user.status === "Aktif" ? (
-                                            <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 w-fit">
-                                                <CheckCircle2 size={12} /> Aktif
-                                            </span>
-                                        ) : (
-                                            <span className="bg-slate-200 text-slate-500 text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 w-fit">
-                                                <X size={12} /> Non-aktif
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <Tooltip text={user.status === "Aktif" ? "Nonaktifkan Akses" : "Aktifkan Akses"} position="top">
-                                                <ToggleSwitch
-                                                    checked={user.status === 'Aktif'}
-                                                    onChange={() => handleToggleUserStatus(user.id)}
-                                                />
-                                            </Tooltip>
-                                            <Tooltip text="Reset Sandi" position="top">
-                                                <button onClick={() => handleOpenPasswordModal(user)} className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all p-1.5 rounded-lg active:scale-95"><Key size={16} /></button>
-                                            </Tooltip>
-                                            <Tooltip text="Edit User" position="top">
-                                                <button onClick={() => handleEditUser(user)} className="text-slate-400 hover:text-[#C1986E] hover:bg-[#C1986E]/10 transition-all p-1.5 rounded-lg active:scale-95"><Edit size={16} /></button>
-                                            </Tooltip>
-                                            <Tooltip text="Hapus User" position="top">
-                                                <button onClick={() => handleDeleteUser(user.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all p-1.5 rounded-lg active:scale-95"><Trash2 size={16} /></button>
-                                            </Tooltip>
-                                        </div>
-                                    </td>
+
+                <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+                        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                            <Users size={18} className="text-[#C1986E]" /> Daftar Pengguna Sistem
+                        </h3>
+                        <button
+                            onClick={() => {
+                                if (isSavingUser) return;
+                                userSubmitLockRef.current = false;
+                                setUserInput(createEmptyUserInput());
+                                setEditingUserId(null);
+                                setIsUserModalOpen(true);
+                            }}
+                            disabled={isSavingUser}
+                            className="bg-[#C1986E] text-white px-4 py-2 rounded-lg hover:bg-[#A37E58] transition-all active:scale-95 text-sm font-medium flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Plus size={16} /> Tambah Pengguna
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[860px] table-fixed text-left whitespace-nowrap">
+                            <thead className="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    <th className="w-[40%] px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('name', userSort, setUserSort)}>
+                                        <div className="flex items-center gap-2">Informasi Pengguna <SortIcon columnKey="name" sortConfig={userSort} /></div>
+                                    </th>
+                                    <th className="w-[18%] px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('role', userSort, setUserSort)}>
+                                        <div className="flex items-center gap-2">Role Akses <SortIcon columnKey="role" sortConfig={userSort} /></div>
+                                    </th>
+                                    <th className="w-[16%] px-6 py-4 font-semibold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors group select-none" onClick={() => handleSortChange('status', userSort, setUserSort)}>
+                                        <div className="flex items-center gap-2">Status <SortIcon columnKey="status" sortConfig={userSort} /></div>
+                                    </th>
+                                    <th className="w-[26%] px-6 py-4 font-semibold text-slate-600 text-sm text-center">Aksi</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filteredUsers.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="4" className="px-6 py-10 text-center text-sm text-slate-400">
+                                            Tidak ada data pengguna yang cocok.
+                                        </td>
+                                    </tr>
+                                ) : filteredUsers.map((user) => {
+                                    const userIsActive = isUserActive(user.status);
+                                    const isPending = isUserPendingAction(user.id);
+
+                                    return (
+                                        <tr key={user.id} className={`transition-colors ${userIsActive ? 'hover:bg-slate-50' : 'bg-slate-50/60 grayscale-[20%]'}`}>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold shrink-0 ${userIsActive ? 'bg-[#C1986E]/10 text-[#C1986E]' : 'bg-slate-200 text-slate-500'}`}>
+                                                        {(user.name || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className={`font-semibold text-sm truncate ${userIsActive ? 'text-slate-800' : 'text-slate-500'}`}>{user.name}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5 truncate">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center justify-center min-w-[112px] text-xs px-3 py-1.5 rounded-full font-medium ${userIsActive ? (normalizeUserRole(user.role) === 'Super Admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700') : 'bg-slate-200 text-slate-600'}`}>
+                                                    {normalizeUserRole(user.role)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {userIsActive ? (
+                                                    <span className="inline-flex items-center justify-center min-w-[92px] bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium gap-1">
+                                                        <CheckCircle2 size={12} /> Aktif
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center justify-center min-w-[92px] bg-slate-200 text-slate-500 text-xs px-2.5 py-1 rounded-full font-medium gap-1">
+                                                        <X size={12} /> Non-aktif
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Tooltip text={userIsActive ? "Nonaktifkan Akses" : "Aktifkan Akses"} position="top">
+                                                        <ToggleSwitch
+                                                            checked={userIsActive}
+                                                            onChange={() => handleToggleUserStatus(user)}
+                                                            disabled={isPending}
+                                                        />
+                                                    </Tooltip>
+                                                    <Tooltip text="Reset Sandi" position="top">
+                                                        <button disabled={isPending} onClick={() => handleOpenPasswordModal(user)} className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><Key size={16} /></button>
+                                                    </Tooltip>
+                                                    <Tooltip text="Edit User" position="top">
+                                                        <button disabled={isPending} onClick={() => handleEditUser(user)} className="text-slate-400 hover:text-[#C1986E] hover:bg-[#C1986E]/10 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><Edit size={16} /></button>
+                                                    </Tooltip>
+                                                    <Tooltip text="Hapus User" position="top">
+                                                        <button disabled={isPending} onClick={() => handleDeleteUser(user.id)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><Trash2 size={16} /></button>
+                                                    </Tooltip>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {/* Modal Ubah Password */}
@@ -2757,8 +3424,8 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
-                                    <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm">Batal</button>
-                                    <button type="submit" className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm">Simpan Sandi Baru</button>
+                                    <button type="button" disabled={isSavingPassword} onClick={() => setIsPasswordModalOpen(false)} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm disabled:opacity-40 disabled:cursor-not-allowed">Batal</button>
+                                    <button type="submit" disabled={isSavingPassword} className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingPassword ? "Menyimpan..." : "Simpan Sandi Baru"}</button>
                                 </div>
                             </form>
                         </div>
@@ -2769,7 +3436,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                 {isUserModalOpen && (
                     <div
                         className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-                        onClick={handleCancelEditUser} // Fungsi tutup saat klik background
+                        onClick={() => { if (!isSavingUser) handleCancelEditUser(); }} // Fungsi tutup saat klik background
                     >
                         <div
                             className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
@@ -2780,7 +3447,7 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                     {editingUserId ? <Edit size={18} className="text-[#C1986E]" /> : <Users size={18} className="text-[#C1986E]" />}
                                     {editingUserId ? "Edit Data Pengguna" : "Tambah Pengguna Baru"}
                                 </h3>
-                                <button onClick={handleCancelEditUser} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95"><X size={18} /></button>
+                                <button disabled={isSavingUser} onClick={handleCancelEditUser} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><X size={18} /></button>
                             </div>
                             <form onSubmit={handleSaveUser} className="flex flex-col">
                                 <div className="p-6 space-y-4">
@@ -2817,6 +3484,17 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                             <option value="Super Admin">Super Admin (Akses Penuh)</option>
                                         </select>
                                     </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">Status Akses</label>
+                                        <select
+                                            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm bg-white"
+                                            value={String(normalizeUserStatus(userInput.status))}
+                                            onChange={(e) => setUserInput({ ...userInput, status: Number(e.target.value) })}
+                                        >
+                                            <option value="1">Aktif (Bisa Login)</option>
+                                            <option value="0">Non-aktif (Tidak Bisa Login)</option>
+                                        </select>
+                                    </div>
                                     {!editingUserId && (
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500 uppercase">Sandi Awal</label>
@@ -2827,13 +3505,14 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                                                 value={userInput.password}
                                                 onChange={(e) => setUserInput({ ...userInput, password: e.target.value })}
                                                 required={!editingUserId}
+                                                minLength={8}
                                             />
                                         </div>
                                     )}
                                 </div>
                                 <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
-                                    <button type="button" onClick={handleCancelEditUser} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm">Batal</button>
-                                    <button type="submit" className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm">{editingUserId ? "Simpan Perubahan" : "Buat Akun"}</button>
+                                    <button type="button" disabled={isSavingUser} onClick={handleCancelEditUser} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm disabled:opacity-40 disabled:cursor-not-allowed">Batal</button>
+                                    <button type="submit" disabled={isSavingUser} className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingUser ? "Menyimpan..." : (editingUserId ? "Simpan Perubahan" : "Buat Akun")}</button>
                                 </div>
                             </form>
                         </div>
@@ -3098,11 +3777,11 @@ export default function Dashboard({ databaseBrands, databaseCategories }) {
                         <>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C1986E] to-[#A37E58] text-white flex items-center justify-center font-bold flex-shrink-0 text-sm shadow-sm">
-                                    AU
+                                    {sidebarUserInitials}
                                 </div>
                                 <div className="flex flex-col overflow-hidden">
-                                    <span className="text-sm font-bold text-slate-800 truncate">Admin Utama</span>
-                                    <span className="text-[10px] text-slate-500 truncate">Super Admin</span>
+                                    <span className="text-sm font-bold text-slate-800 truncate">{sidebarUserName}</span>
+                                    <span className="text-[10px] text-slate-500 truncate">{sidebarUserRole}</span>
                                 </div>
                             </div>
                             <Tooltip text="Keluar Sistem" position="top">

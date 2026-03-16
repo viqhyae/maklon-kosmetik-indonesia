@@ -65,6 +65,14 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        if ((int) ($user->status ?? 1) !== 1) {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'login' => 'Akun Anda sedang non-aktif. Hubungi administrator.',
+            ]);
+        }
+
         Auth::login($user, $remember);
         RateLimiter::clear($this->throttleKey());
     }
