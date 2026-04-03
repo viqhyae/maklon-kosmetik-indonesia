@@ -91,7 +91,7 @@ class BrandController extends Controller {
                 ->all();
         }
 
-        return Inertia::render('Dashboard', [
+        return Inertia::render('AdminPanel', [
             'databaseBrands' => Brand::query()
                 ->latest('id')
                 ->get()
