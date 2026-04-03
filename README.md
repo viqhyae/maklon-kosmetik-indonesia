@@ -1,4 +1,4 @@
-# Dokumentasi Arsitektur AdminPanel
+# Dokumentasi Arsitektur MKI-DASHBOARD
 
 Dokumentasi ini menjelaskan struktur terbaru halaman admin setelah refactor besar dari file monolitik menjadi modul-modul terpisah.
 
