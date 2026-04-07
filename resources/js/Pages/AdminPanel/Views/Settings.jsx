@@ -36,7 +36,7 @@ export default function createSettings(context) {
             return (
                 <div className="space-y-6 animate-in fade-in duration-500">
                     <PageAlert text="Halaman pengaturan akun Brand Owner. Anda dapat melihat profil sendiri dan memperbarui email/password login." />
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 max-w-3xl space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 w-full space-y-6">
                         <div>
                             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
                                 <User size={18} className="text-[#C1986E]" /> Profil Akun
@@ -126,7 +126,7 @@ export default function createSettings(context) {
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
                 <PageAlert text="Pengaturan sistem global. Hanya Super Admin yang dapat mengubah beberapa konfigurasi krusial keamanan." />
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 max-w-3xl">
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 w-full">
                     <h3 className="font-semibold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
                         <Lock size={18} className="text-[#C1986E]" /> Konfigurasi Keamanan (Anti-Counterfeit)
                     </h3>

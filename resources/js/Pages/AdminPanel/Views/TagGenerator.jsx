@@ -437,52 +437,88 @@ export default function createTagGenerator(context) {
                         onClick={() => setSelectedBatchDetail(null)}
                     >
                         <div
-                            className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+                            className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
                             onClick={(event) => event.stopPropagation()}
                         >
-                            <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center">
+                            <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center z-10 sticky top-0">
                                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                    <Eye size={18} className="text-[#C1986E]" /> Preview Batch
+                                    <Eye size={18} className="text-[#C1986E]" /> Detail Batch Tag
                                 </h3>
-                                <button onClick={() => setSelectedBatchDetail(null)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95">
+                                <button onClick={() => setSelectedBatchDetail(null)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all p-1.5 rounded-lg active:scale-95">
                                     <X size={18} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4 text-sm">
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Batch ID</p>
-                                    <p className="font-mono text-slate-800">{selectedBatchDetail.id}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Produk</p>
-                                    <p className="text-slate-800">{selectedBatchDetail.productName}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Brand</p>
-                                    <p className="text-slate-700">{selectedBatchDetail.brandName || '-'}</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Jumlah Tag</p>
-                                        <p className="text-slate-800">{new Intl.NumberFormat('id-ID').format(Number(selectedBatchDetail.qty || 0))}</p>
+
+                            <div className="p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    <div className="w-full md:w-1/3 flex flex-col gap-4 shrink-0">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center shadow-inner">
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Batch ID</p>
+                                            <p className="font-mono text-sm font-bold text-slate-800 break-all">{selectedBatchDetail.id}</p>
+                                        </div>
+
+                                        <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                                            <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mb-1.5">Total Tag Batch</p>
+                                            <p className="text-3xl font-extrabold text-blue-700 leading-none">
+                                                {new Intl.NumberFormat('id-ID').format(Number(selectedBatchDetail.qty || 0))}
+                                            </p>
+                                            <p className="text-xs font-medium text-blue-600 mt-1">Tag Keamanan</p>
+                                        </div>
+
+                                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">Status Batch</p>
+                                            {selectedBatchDetail.status === 'Generated' ? (
+                                                <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1">
+                                                    <CheckCircle2 size={12} /> Aktif
+                                                </span>
+                                            ) : (
+                                                <span className="bg-red-100 text-red-700 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1">
+                                                    <AlertCircle size={12} /> Suspended
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Status</p>
-                                        <p className="text-slate-800">{selectedBatchDetail.status}</p>
+
+                                    <div className="w-full md:w-2/3 flex flex-col">
+                                        <div className="pb-5 border-b border-slate-100 mb-5">
+                                            <h4 className="font-extrabold text-2xl text-slate-800 leading-tight mb-3">{selectedBatchDetail.productName}</h4>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-[#C1986E] font-bold flex items-center gap-1.5 bg-[#C1986E]/10 w-fit px-3 py-1.5 rounded-lg border border-[#C1986E]/20">
+                                                    <Tag size={15} /> {selectedBatchDetail.brandName || '-'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                                                    <Key size={14} className="text-slate-400" /> Rentang Kode Batch
+                                                </p>
+                                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 shadow-inner">
+                                                    <p className="text-slate-700 font-mono text-xs break-all leading-relaxed">
+                                                        {(selectedBatchDetail.firstCode || '-') + ' - ' + (selectedBatchDetail.lastCode || '-')}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Tanggal Batch</p>
+                                                    <p className="text-sm font-medium text-slate-700">{selectedBatchDetail.date || '-'}</p>
+                                                </div>
+                                                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Panjang PIN Acak</p>
+                                                    <p className="text-sm font-medium text-slate-700">{selectedBatchDetail?.settings?.randomLength || '-'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Rentang Kode</p>
-                                    <p className="text-slate-700 font-mono text-xs break-all">{selectedBatchDetail.firstCode || '-'} - {selectedBatchDetail.lastCode || '-'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Tanggal Batch</p>
-                                    <p className="text-slate-700">{selectedBatchDetail.date || '-'}</p>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end">
-                                <button onClick={() => setSelectedBatchDetail(null)} className="px-6 py-2.5 rounded-lg font-medium text-white bg-slate-800 hover:bg-slate-700 transition-all active:scale-95 text-sm">
-                                    Tutup
+
+                            <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end z-10 sticky bottom-0">
+                                <button onClick={() => setSelectedBatchDetail(null)} className="px-8 py-2.5 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-700 transition-all shadow-md active:scale-95 text-sm">
+                                    Tutup Preview
                                 </button>
                             </div>
                         </div>

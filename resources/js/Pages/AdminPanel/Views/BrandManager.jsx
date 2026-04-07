@@ -91,6 +91,9 @@ export default function createBrandManager(context) {
             }
             return (a.id - b.id) * dir;
         });
+        const previewBrandLogoSrc = previewBrand ? buildBrandLogoSrc(previewBrand) : null;
+        const isPreviewLogoBroken = previewBrand ? brokenBrandLogoIds.includes(previewBrand.id) : false;
+        const previewBrandSkuCount = previewBrand ? (productCountByBrandId[Number(previewBrand.id)] || 0) : 0;
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -243,44 +246,93 @@ export default function createBrandManager(context) {
                         onClick={() => setPreviewBrand(null)}
                     >
                         <div
-                            className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
+                            className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
                             onClick={(event) => event.stopPropagation()}
                         >
-                            <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center">
+                            <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center z-10 sticky top-0">
                                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                    <Eye size={18} className="text-[#C1986E]" /> Preview Brand
+                                    <Eye size={18} className="text-[#C1986E]" /> Detail Informasi Brand
                                 </h3>
                                 <button
                                     onClick={() => setPreviewBrand(null)}
-                                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95"
+                                    className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all p-1.5 rounded-lg active:scale-95"
                                 >
                                     <X size={18} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4 text-sm">
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Nama Brand</p>
-                                    <p className="font-semibold text-slate-800">{previewBrand.name}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Kode Brand</p>
-                                    <p className="font-mono text-slate-700">{previewBrand.brand_code || `ID-${previewBrand.id}`}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Pemilik</p>
-                                    <p className="text-slate-700">{previewBrand.owner_name || 'Belum ditetapkan'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Status</p>
-                                    <p className="text-slate-700">{isBrandActive(previewBrand.status) ? 'Aktif' : 'Non-aktif'}</p>
+
+                            <div className="p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    <div className="w-full md:w-1/3 flex flex-col gap-4 shrink-0">
+                                        <div className="w-full aspect-square bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 shadow-inner overflow-hidden">
+                                            {previewBrandLogoSrc && !isPreviewLogoBroken ? (
+                                                <img
+                                                    src={previewBrandLogoSrc}
+                                                    alt={previewBrand.name}
+                                                    className="h-full w-full object-cover"
+                                                    onError={() => markBrandLogoBroken(previewBrand.id)}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <ImageIcon size={48} className="mb-3 text-slate-300" />
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Preview Logo</span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                                            <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mb-1.5">Total SKU Terdaftar</p>
+                                            <p className="text-3xl font-extrabold text-blue-700 leading-none">
+                                                {new Intl.NumberFormat('id-ID').format(previewBrandSkuCount)}
+                                            </p>
+                                            <p className="text-xs font-medium text-blue-600 mt-1">Produk SKU</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="w-full md:w-2/3 flex flex-col">
+                                        <div className="pb-5 border-b border-slate-100 mb-5">
+                                            <div className="flex items-center gap-2 mb-3 flex-wrap">
+                                                <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded border border-slate-200 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <Key size={11} /> {previewBrand.brand_code || `ID-${previewBrand.id}`}
+                                                </span>
+                                                {isBrandActive(previewBrand.status) ? (
+                                                    <span className="inline-flex min-w-[94px] justify-center bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full items-center gap-1">
+                                                        <CheckCircle2 size={12} /> Aktif
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex min-w-[94px] justify-center bg-slate-200 text-slate-500 text-xs px-2 py-1 rounded-full items-center gap-1">
+                                                        <X size={12} /> Non-aktif
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h4 className="font-extrabold text-2xl text-slate-800 leading-tight mb-3">{previewBrand.name}</h4>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-[#C1986E] font-bold flex items-center gap-1.5 bg-[#C1986E]/10 w-fit px-3 py-1.5 rounded-lg border border-[#C1986E]/20">
+                                                    <Building2 size={16} /> {previewBrand.owner_name || 'Belum ditetapkan'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                                                    <Info size={14} className="text-slate-400" /> Detail Pemilik
+                                                </p>
+                                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 text-sm text-slate-700 shadow-inner">
+                                                    {previewBrand.owner_name || <span className="text-slate-400 italic">Brand ini belum memiliki pemilik.</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end">
+
+                            <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end z-10 sticky bottom-0">
                                 <button
                                     onClick={() => setPreviewBrand(null)}
-                                    className="px-6 py-2.5 rounded-lg font-medium text-white bg-slate-800 hover:bg-slate-700 transition-all active:scale-95 text-sm"
+                                    className="px-8 py-2.5 rounded-xl font-bold text-white bg-slate-800 hover:bg-slate-700 transition-all shadow-md active:scale-95 text-sm"
                                 >
-                                    Tutup
+                                    Tutup Preview
                                 </button>
                             </div>
                         </div>
