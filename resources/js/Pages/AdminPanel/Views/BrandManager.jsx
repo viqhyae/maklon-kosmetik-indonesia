@@ -143,7 +143,7 @@ export default function createBrandManager(context) {
                                     const hasBrokenLogo = brokenBrandLogoIds.includes(brand.id);
 
                                     return (
-                                        <tr key={brand.id} className={`transition-colors ${isBrandActive(brand.status) ? 'hover:bg-slate-50' : 'bg-slate-50/50 grayscale-[20%]'}`}>
+                                        <tr key={brand.id} className={`transition-colors ${isBrandActive(brand.status) ? 'hover:bg-slate-50' : 'bg-white hover:bg-slate-50'}`}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 overflow-hidden border border-slate-200">
@@ -187,7 +187,7 @@ export default function createBrandManager(context) {
                                                         <CheckCircle2 size={12} /> Aktif
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex min-w-[94px] justify-center bg-slate-200 text-slate-500 text-xs px-2 py-1 rounded-full items-center gap-1">
+                                                    <span className="inline-flex min-w-[94px] justify-center bg-red-50 text-red-700 border border-red-200 text-xs px-2 py-1 rounded-full items-center gap-1">
                                                         <X size={12} /> Non-aktif
                                                     </span>
                                                 )}
@@ -300,7 +300,7 @@ export default function createBrandManager(context) {
                                                         <CheckCircle2 size={12} /> Aktif
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex min-w-[94px] justify-center bg-slate-200 text-slate-500 text-xs px-2 py-1 rounded-full items-center gap-1">
+                                                    <span className="inline-flex min-w-[94px] justify-center bg-red-50 text-red-700 border border-red-200 text-xs px-2 py-1 rounded-full items-center gap-1">
                                                         <X size={12} /> Non-aktif
                                                     </span>
                                                 )}

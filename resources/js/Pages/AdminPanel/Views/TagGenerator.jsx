@@ -321,18 +321,18 @@ export default function createTagGenerator(context) {
 
                 {/* TABEL RIWAYAT BATCH */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto mt-6">
-                    <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-4">
+                    <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 gap-4">
                         <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                             <Layers size={18} className="text-[#C1986E]" /> Riwayat Batch Generate
                         </h3>
                         <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                                <span className="text-xs font-medium text-slate-500">Total Tag Dibuat:</span>
-                                <span className="text-sm font-bold text-[#C1986E]">
+                            <div className="batch-total-pill flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                <span className="batch-total-label text-xs font-medium text-slate-500">Total Tag Dibuat:</span>
+                                <span className="batch-total-value text-sm font-bold text-[#C1986E]">
                                     {new Intl.NumberFormat('id-ID').format(filteredBatches.reduce((total, batch) => total + batch.qty, 0))}
                                 </span>
                             </div>
-                            <span className="text-xs font-medium bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg">{filteredBatches.length} Batch</span>
+                            <span className="batch-count-pill text-xs font-medium bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg">{filteredBatches.length} Batch</span>
                         </div>
                     </div>
                     <table className="w-full text-left whitespace-nowrap">
@@ -360,7 +360,7 @@ export default function createTagGenerator(context) {
                                 filteredBatches.map(batch => {
                                     const isPending = isBatchPendingAction(batch.id);
                                     return (
-                                    <tr key={batch.id} className={`transition-colors ${batch.status === 'Suspended' ? 'bg-red-50/30' : 'hover:bg-slate-50'} ${isPending ? 'opacity-60' : ''}`}>
+                                    <tr key={batch.id} className={`transition-colors ${batch.status === 'Suspended' ? 'bg-slate-50' : 'hover:bg-slate-50'} ${isPending ? 'opacity-60' : ''}`}>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <p className="font-mono text-sm font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded inline-block">{batch.id}</p>

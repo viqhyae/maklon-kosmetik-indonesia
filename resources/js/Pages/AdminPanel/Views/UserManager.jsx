@@ -2,6 +2,8 @@ import React from 'react';
 import {
     CheckCircle2,
     Edit,
+    Eye,
+    EyeOff,
     Filter,
     Key,
     Map,
@@ -49,6 +51,9 @@ export default function createUserManager(context) {
         userSubmitLockRef,
     } = context;
     const UserManager = () => {
+        const [isResetNewPasswordVisible, setIsResetNewPasswordVisible] = React.useState(false);
+        const [isResetConfirmPasswordVisible, setIsResetConfirmPasswordVisible] = React.useState(false);
+        const [isInitialPasswordVisible, setIsInitialPasswordVisible] = React.useState(false);
         const userSearchQuery = globalSearch.toLowerCase().trim();
         const filteredUsers = systemUsers
             .filter((user) =>
@@ -74,7 +79,7 @@ export default function createUserManager(context) {
                 <PageAlert text="Kelola akses pengguna sistem di sini. Klik pada judul kolom di tabel untuk mengurutkan data." />
 
                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/60">
+                    <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50">
                         <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                             <Users size={18} className="text-[#C1986E]" /> Daftar Pengguna Sistem
                         </h3>
@@ -121,7 +126,7 @@ export default function createUserManager(context) {
                                     const isPending = isUserPendingAction(user.id);
 
                                     return (
-                                        <tr key={user.id} className={`transition-colors ${userIsActive ? 'hover:bg-slate-50' : 'bg-slate-50/60 grayscale-[20%]'}`}>
+                                        <tr key={user.id} className={`transition-colors ${userIsActive ? 'hover:bg-slate-50' : 'bg-white hover:bg-slate-50'}`}>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold shrink-0 ${userIsActive ? 'bg-[#C1986E]/10 text-[#C1986E]' : 'bg-slate-200 text-slate-500'}`}>
@@ -144,7 +149,7 @@ export default function createUserManager(context) {
                                                         <CheckCircle2 size={12} /> Aktif
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center justify-center min-w-[92px] bg-slate-200 text-slate-500 text-xs px-2.5 py-1 rounded-full font-medium gap-1">
+                                                    <span className="inline-flex items-center justify-center min-w-[92px] bg-red-50 text-red-700 border border-red-200 text-xs px-2.5 py-1 rounded-full font-medium gap-1">
                                                         <X size={12} /> Non-aktif
                                                     </span>
                                                 )}
@@ -200,25 +205,45 @@ export default function createUserManager(context) {
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500 uppercase">Sandi Baru</label>
-                                        <input
-                                            type="password"
-                                            placeholder="Masukkan sandi baru"
-                                            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                            value={passwordData.newPassword}
-                                            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                            required
-                                        />
+                                        <div className="relative">
+                                            <input
+                                                type={isResetNewPasswordVisible ? 'text' : 'password'}
+                                                placeholder="Masukkan sandi baru"
+                                                className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                                value={passwordData.newPassword}
+                                                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                                required
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsResetNewPasswordVisible((prev) => !prev)}
+                                                className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                                aria-label={isResetNewPasswordVisible ? 'Sembunyikan sandi baru' : 'Tampilkan sandi baru'}
+                                            >
+                                                {isResetNewPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500 uppercase">Konfirmasi Sandi Baru</label>
-                                        <input
-                                            type="password"
-                                            placeholder="Ketik ulang sandi baru"
-                                            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                            value={passwordData.confirmPassword}
-                                            onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                                            required
-                                        />
+                                        <div className="relative">
+                                            <input
+                                                type={isResetConfirmPasswordVisible ? 'text' : 'password'}
+                                                placeholder="Ketik ulang sandi baru"
+                                                className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                                value={passwordData.confirmPassword}
+                                                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                                required
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsResetConfirmPasswordVisible((prev) => !prev)}
+                                                className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                                aria-label={isResetConfirmPasswordVisible ? 'Sembunyikan konfirmasi sandi baru' : 'Tampilkan konfirmasi sandi baru'}
+                                            >
+                                                {isResetConfirmPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
@@ -296,15 +321,25 @@ export default function createUserManager(context) {
                                     {!editingUserId && (
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500 uppercase">Sandi Awal</label>
-                                            <input
-                                                type="password"
-                                                placeholder="Sandi untuk login pertama"
-                                                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                                value={userInput.password}
-                                                onChange={(e) => setUserInput({ ...userInput, password: e.target.value })}
-                                                required={!editingUserId}
-                                                minLength={8}
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type={isInitialPasswordVisible ? 'text' : 'password'}
+                                                    placeholder="Sandi untuk login pertama"
+                                                    className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                                    value={userInput.password}
+                                                    onChange={(e) => setUserInput({ ...userInput, password: e.target.value })}
+                                                    required={!editingUserId}
+                                                    minLength={8}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsInitialPasswordVisible((prev) => !prev)}
+                                                    className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                                    aria-label={isInitialPasswordVisible ? 'Sembunyikan sandi awal' : 'Tampilkan sandi awal'}
+                                                >
+                                                    {isInitialPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

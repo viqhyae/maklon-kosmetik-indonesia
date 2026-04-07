@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+    Eye,
+    EyeOff,
     KeyRound,
     Lock,
     Mail,
@@ -32,6 +34,10 @@ export default function createSettings(context) {
         Tooltip,
     } = context;
     const Settings = () => {
+        const [isCurrentPasswordVisible, setIsCurrentPasswordVisible] = React.useState(false);
+        const [isNewPasswordVisible, setIsNewPasswordVisible] = React.useState(false);
+        const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = React.useState(false);
+
         if (isBrandOwnerRole) {
             return (
                 <div className="space-y-6 animate-in fade-in duration-500">
@@ -86,27 +92,57 @@ export default function createSettings(context) {
                                 <KeyRound size={18} className="text-[#C1986E]" /> Ubah Password
                             </h3>
                             <div className="space-y-3">
-                                <input
-                                    type="password"
-                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                    value={accountPasswordInput.currentPassword}
-                                    onChange={(event) => setAccountPasswordInput((current) => ({ ...current, currentPassword: event.target.value }))}
-                                    placeholder="Password saat ini"
-                                />
-                                <input
-                                    type="password"
-                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                    value={accountPasswordInput.newPassword}
-                                    onChange={(event) => setAccountPasswordInput((current) => ({ ...current, newPassword: event.target.value }))}
-                                    placeholder="Password baru"
-                                />
-                                <input
-                                    type="password"
-                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
-                                    value={accountPasswordInput.confirmPassword}
-                                    onChange={(event) => setAccountPasswordInput((current) => ({ ...current, confirmPassword: event.target.value }))}
-                                    placeholder="Konfirmasi password baru"
-                                />
+                                <div className="relative">
+                                    <input
+                                        type={isCurrentPasswordVisible ? 'text' : 'password'}
+                                        className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                        value={accountPasswordInput.currentPassword}
+                                        onChange={(event) => setAccountPasswordInput((current) => ({ ...current, currentPassword: event.target.value }))}
+                                        placeholder="Password saat ini"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCurrentPasswordVisible((prev) => !prev)}
+                                        className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                        aria-label={isCurrentPasswordVisible ? 'Sembunyikan password saat ini' : 'Tampilkan password saat ini'}
+                                    >
+                                        {isCurrentPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type={isNewPasswordVisible ? 'text' : 'password'}
+                                        className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                        value={accountPasswordInput.newPassword}
+                                        onChange={(event) => setAccountPasswordInput((current) => ({ ...current, newPassword: event.target.value }))}
+                                        placeholder="Password baru"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsNewPasswordVisible((prev) => !prev)}
+                                        className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                        aria-label={isNewPasswordVisible ? 'Sembunyikan password baru' : 'Tampilkan password baru'}
+                                    >
+                                        {isNewPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type={isConfirmPasswordVisible ? 'text' : 'password'}
+                                        className="w-full border border-slate-200 rounded-lg px-4 pr-11 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm"
+                                        value={accountPasswordInput.confirmPassword}
+                                        onChange={(event) => setAccountPasswordInput((current) => ({ ...current, confirmPassword: event.target.value }))}
+                                        placeholder="Konfirmasi password baru"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsConfirmPasswordVisible((prev) => !prev)}
+                                        className="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-slate-600 transition-colors"
+                                        aria-label={isConfirmPasswordVisible ? 'Sembunyikan konfirmasi password baru' : 'Tampilkan konfirmasi password baru'}
+                                    >
+                                        {isConfirmPasswordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
                                 <div className="flex justify-end">
                                     <button
                                         onClick={handleSaveAccountPassword}

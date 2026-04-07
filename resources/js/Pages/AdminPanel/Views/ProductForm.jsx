@@ -97,11 +97,11 @@ export default function createProductForm(context) {
         };
 
         return (
-            <div className="animate-in fade-in duration-500 pb-20">
+            <div className="mt-0 md:mt-0 pb-20">
 
                 {/* Header Form & Navigasi Sticky - Full Width sejajar dengan Buttons */}
-                <div className="sticky top-[-16px] md:top-[-32px] z-[100] bg-white/95 backdrop-blur-md border-b border-slate-200 -mx-4 md:-mx-8 px-4 md:px-8 mb-8 shadow-sm">
-                    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4 md:pt-6">
+                <div className="sticky top-0 z-[100] bg-white border-b border-slate-200 -mx-4 md:-mx-8 px-4 md:px-8 mb-8 shadow-sm">
+                    <div className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 md:py-4">
 
                         {/* Tab Navigasi */}
                         <div className="flex gap-6 overflow-x-auto hide-scrollbar-mobile w-full sm:w-auto">
@@ -111,7 +111,7 @@ export default function createProductForm(context) {
                         </div>
 
                         {/* Buttons Action */}
-                        <div className="flex items-center gap-3 w-full sm:w-auto pb-3">
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
                             <button type="button" onClick={handleCancelEditProduct} disabled={isSavingProduct} className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm hidden sm:block disabled:opacity-50 disabled:cursor-not-allowed">Batal</button>
                             <button onClick={handleSaveProduct} disabled={isSavingProduct} className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-md active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
                                 <Package size={16} /> {isSavingProduct ? 'Menyimpan...' : 'Simpan'}

@@ -7,6 +7,8 @@ import {
     CheckCircle2,
     ShieldCheck,
     LogOut,
+    Moon,
+    Sun,
 } from 'lucide-react';
 import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -38,10 +40,19 @@ export default function AdminPanel({
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMasterDataOpen, setIsMasterDataOpen] = useState(true);
     const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.localStorage.getItem('mki-admin-theme') === 'dark';
+    });
 
     // --- STATE ALERT & MODAL KONFIRMASI (GLOBAL) ---
     const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
     const [confirmObj, setConfirmObj] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('mki-admin-theme', isDarkMode ? 'dark' : 'light');
+    }, [isDarkMode]);
 
     const showToast = (message, type = 'success') => {
         setToast({ isOpen: true, message, type });
@@ -174,6 +185,35 @@ export default function AdminPanel({
         latitude: log?.latitude ?? null,
         longitude: log?.longitude ?? null,
     });
+    const isSameScanLogRecord = (left, right) => (
+        Number(left?.id || 0) === Number(right?.id || 0) &&
+        String(left?.scannedAt || '') === String(right?.scannedAt || '') &&
+        String(left?.time || '') === String(right?.time || '') &&
+        String(left?.tagCode || '') === String(right?.tagCode || '') &&
+        String(left?.productName || '') === String(right?.productName || '') &&
+        String(left?.brand || '') === String(right?.brand || '') &&
+        String(left?.location || '') === String(right?.location || '') &&
+        String(left?.ip || '') === String(right?.ip || '') &&
+        Number(left?.scanCount || 0) === Number(right?.scanCount || 0) &&
+        String(left?.status || '') === String(right?.status || '') &&
+        String(left?.tagStatus || '') === String(right?.tagStatus || '') &&
+        String(left?.userAgent || '') === String(right?.userAgent || '') &&
+        Number(left?.latitude ?? NaN) === Number(right?.latitude ?? NaN) &&
+        Number(left?.longitude ?? NaN) === Number(right?.longitude ?? NaN)
+    );
+    const areScanLogCollectionsEqual = (currentLogs, nextLogs) => {
+        if (currentLogs === nextLogs) return true;
+        if (!Array.isArray(currentLogs) || !Array.isArray(nextLogs)) return false;
+        if (currentLogs.length !== nextLogs.length) return false;
+
+        for (let index = 0; index < currentLogs.length; index += 1) {
+            if (!isSameScanLogRecord(currentLogs[index], nextLogs[index])) {
+                return false;
+            }
+        }
+
+        return true;
+    };
     const createEmptyUserInput = () => ({ name: '', email: '', role: 'Brand Owner', password: '', status: 1 });
     const createEmptyProductInput = () => ({
         name: '',
@@ -528,6 +568,7 @@ export default function AdminPanel({
     const [products, setProducts] = useState((databaseProducts || []).map(normalizeProductRecord));
     const [scanLogs, setScanLogs] = useState((databaseScanLogs || []).map(normalizeScanLogRecord));
     const [isRefreshingScanLogs, setIsRefreshingScanLogs] = useState(false);
+    const [selectedScanLogDetail, setSelectedScanLogDetail] = useState(null);
 
     const [batches, setBatches] = useState((databaseTagBatches || []).map(normalizeBatchRecord));
     const [isSavingBatch, setIsSavingBatch] = useState(false);
@@ -678,7 +719,10 @@ export default function AdminPanel({
     }, [databaseProducts]);
 
     useEffect(() => {
-        setScanLogs((databaseScanLogs || []).map(normalizeScanLogRecord));
+        const incomingLogs = (databaseScanLogs || []).map(normalizeScanLogRecord);
+        setScanLogs((currentLogs) => (
+            areScanLogCollectionsEqual(currentLogs, incomingLogs) ? currentLogs : incomingLogs
+        ));
     }, [databaseScanLogs]);
 
     useEffect(() => {
@@ -702,42 +746,45 @@ export default function AdminPanel({
     }, [activeTab, isBrandOwnerRole]);
 
     useEffect(() => {
+        if (activeTab === 'scan_history') {
+            return;
+        }
+        setSelectedScanLogDetail(null);
+    }, [activeTab]);
+
+    useEffect(() => {
         if (activeTab !== 'scan_history') {
+            return;
+        }
+        if (selectedScanLogDetail) {
             return;
         }
 
         let isActive = true;
-        const fetchScanActivities = (showLoader = false) => {
-            if (showLoader) {
-                setIsRefreshingScanLogs(true);
-            }
-
+        const fetchScanActivities = () => {
             axios.get('/scan-activities')
                 .then((response) => {
                     if (!isActive) return;
                     const logs = Array.isArray(response?.data?.logs) ? response.data.logs : [];
-                    setScanLogs(logs.map(normalizeScanLogRecord));
+                    const normalizedLogs = logs.map(normalizeScanLogRecord);
+                    setScanLogs((currentLogs) => (
+                        areScanLogCollectionsEqual(currentLogs, normalizedLogs) ? currentLogs : normalizedLogs
+                    ));
                 })
                 .catch(() => {
                     // Silent by design: keep existing logs if refresh fails.
-                })
-                .finally(() => {
-                    if (!isActive) return;
-                    if (showLoader) {
-                        setIsRefreshingScanLogs(false);
-                    }
                 });
         };
 
-        fetchScanActivities(false);
-        const intervalId = setInterval(() => fetchScanActivities(true), 5000);
+        fetchScanActivities();
+        const intervalId = setInterval(fetchScanActivities, 5000);
 
         return () => {
             isActive = false;
             clearInterval(intervalId);
             setIsRefreshingScanLogs(false);
         };
-    }, [activeTab]);
+    }, [activeTab, selectedScanLogDetail]);
 
     useEffect(() => {
         return () => {
@@ -1933,8 +1980,10 @@ export default function AdminPanel({
         isSavingSecuritySettings,
         handleSaveSecuritySettings,
         scanLogs,
+        selectedScanLogDetail,
         statusFilter,
         setStatusFilter,
+        setSelectedScanLogDetail,
         isRefreshingScanLogs,
         isBrandOwnerRole,
         isSuperAdminRole,
@@ -1973,7 +2022,7 @@ export default function AdminPanel({
     );
 
     return (
-        <div className="h-screen w-full bg-[#F8F9FA] flex text-slate-800 font-sans overflow-hidden">
+        <div className={`h-screen w-full flex font-sans overflow-hidden ${isDarkMode ? 'admin-theme-dark bg-slate-950 text-slate-100' : 'bg-[#F8F9FA] text-slate-800'}`}>
             {/* Toast Notification */}
             {toast.isOpen && (
                 <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
@@ -2060,12 +2109,29 @@ export default function AdminPanel({
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
                 <header className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex items-center justify-between flex-shrink-0 z-30 relative shadow-sm">
                     <h1 className="text-lg md:text-xl font-bold text-slate-800">{getPageTitle(activeTab)}</h1>
-                    <div className="hidden md:flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                        <Search size={16} className="text-slate-400" />
-                        <input type="text" placeholder="Cari data..." className="bg-transparent border-none outline-none text-sm w-48 focus:ring-0" value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
+                    <div className="hidden md:flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsDarkMode((prev) => !prev)}
+                            className={`inline-flex items-center h-10 gap-2 px-3 rounded-lg border text-sm font-semibold transition-all shadow-sm active:scale-95 ${
+                                isDarkMode
+                                    ? 'bg-slate-800 text-amber-200 border-slate-600 hover:bg-slate-700'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
+                            <span className="hidden lg:inline">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+                        </button>
+                        <div className="admin-global-search-shell flex items-center h-10 gap-2 bg-slate-100 px-3 rounded-lg border border-slate-200">
+                            <Search size={16} className="text-slate-400" />
+                            <input type="text" placeholder="Cari data..." className="admin-global-search-input h-full bg-transparent border-none outline-none text-sm w-48 focus:ring-0" value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
+                        </div>
                     </div>
                 </header>
-                <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth" id="main-scroll-container">
+                <div
+                    className={`flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth ${activeTab === 'product_form' ? 'pt-0 md:pt-0' : ''}`}
+                    id="main-scroll-container"
+                >
                     <div className="max-w-7xl mx-auto">
                         {activeTab === 'dashboard' && <Dashboard />}
                         {activeTab === 'brand' && <BrandManager />}
@@ -2086,6 +2152,59 @@ export default function AdminPanel({
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e2e8f0; border-radius: 10px; }
         .animate-bar { transform-origin: bottom; animation: barGrow 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; transform: scaleY(0); }
         @keyframes barGrow { to { transform: scaleY(1); } }
+        .admin-theme-dark { background-color: #020617; color: #e2e8f0; }
+        .admin-theme-dark .bg-white { background-color: #0f172a !important; }
+        .admin-theme-dark .bg-white\\/90 { background-color: rgba(15, 23, 42, 0.9) !important; }
+        .admin-theme-dark .bg-white\\/80 { background-color: rgba(15, 23, 42, 0.8) !important; }
+        .admin-theme-dark .bg-slate-50 { background-color: #111827 !important; }
+        .admin-theme-dark .bg-slate-50\\/50 { background-color: rgba(17, 24, 39, 0.78) !important; }
+        .admin-theme-dark .bg-slate-50\\/30 { background-color: rgba(17, 24, 39, 0.58) !important; }
+        .admin-theme-dark .bg-slate-100 { background-color: #1f2937 !important; }
+        .admin-theme-dark .bg-slate-100\\/50 { background-color: rgba(30, 41, 59, 0.62) !important; }
+        .admin-theme-dark .border-slate-100,
+        .admin-theme-dark .border-slate-200 { border-color: #334155 !important; }
+        .admin-theme-dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.4) !important; }
+        .admin-theme-dark .bg-blue-50 { background-color: rgba(30, 58, 138, 0.25) !important; }
+        .admin-theme-dark .text-slate-800 { color: #e2e8f0 !important; }
+        .admin-theme-dark .text-slate-700 { color: #cbd5e1 !important; }
+        .admin-theme-dark .text-slate-600 { color: #cbd5e1 !important; }
+        .admin-theme-dark .text-slate-500,
+        .admin-theme-dark .text-slate-400 { color: #94a3b8 !important; }
+        .admin-theme-dark .shadow-sm,
+        .admin-theme-dark .shadow-md,
+        .admin-theme-dark .shadow-xl { box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35) !important; }
+        .admin-theme-dark input,
+        .admin-theme-dark select,
+        .admin-theme-dark textarea { background-color: #0b1220 !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+        .admin-global-search-input,
+        .admin-theme-dark .admin-global-search-input {
+          background-color: transparent !important;
+          box-shadow: none !important;
+        }
+        .admin-theme-dark .admin-global-search-input { color: #e2e8f0 !important; }
+        .admin-theme-dark .admin-global-search-shell {
+          background-color: #111827 !important;
+          border-color: #334155 !important;
+        }
+        .admin-theme-dark .batch-total-pill {
+          background-color: #1f2937 !important;
+          border-color: #334155 !important;
+        }
+        .admin-theme-dark .batch-total-label { color: #cbd5e1 !important; }
+        .admin-theme-dark .batch-total-value { color: #f5d0a8 !important; }
+        .admin-theme-dark .batch-count-pill {
+          background-color: #1e293b !important;
+          color: #e2e8f0 !important;
+        }
+        .admin-theme-dark input::placeholder,
+        .admin-theme-dark textarea::placeholder { color: #64748b !important; }
+        .admin-theme-dark .hover\\:bg-slate-50:hover,
+        .admin-theme-dark .hover\\:bg-slate-100:hover { background-color: #1e293b !important; }
+        .admin-theme-dark .hover\\:bg-slate-50\\/50:hover { background-color: rgba(30, 41, 59, 0.72) !important; }
+        .admin-theme-dark .group:hover .group-hover\\:bg-slate-100\\/50 { background-color: rgba(30, 41, 59, 0.62) !important; }
+        .admin-theme-dark .bg-slate-50\\/60 { background-color: rgba(15, 23, 42, 0.86) !important; }
+        .admin-theme-dark .grayscale-\\[20\\%\\] { filter: none !important; }
+        .admin-theme-dark .bg-black\\/50 { background-color: rgba(2, 6, 23, 0.75) !important; }
       `}} />
 
             {/* Global Confirm Modal */}
