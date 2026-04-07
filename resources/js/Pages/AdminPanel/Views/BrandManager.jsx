@@ -274,10 +274,6 @@ export default function createBrandManager(context) {
                                     <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Status</p>
                                     <p className="text-slate-700">{isBrandActive(previewBrand.status) ? 'Aktif' : 'Non-aktif'}</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-wide text-slate-400 font-bold mb-1">Deskripsi</p>
-                                    <p className="text-slate-700 whitespace-pre-line">{previewBrand.description || '-'}</p>
-                                </div>
                             </div>
                             <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end">
                                 <button

@@ -2067,15 +2067,15 @@ export default function AdminPanel({
                 </header>
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth" id="main-scroll-container">
                     <div className="max-w-7xl mx-auto">
-                        {activeTab === 'dashboard' && Dashboard()}
-                        {activeTab === 'brand' && BrandManager()}
-                        {activeTab === 'categories' && CategoryManager()}
-                        {activeTab === 'product' && ProductManager()}
-                        {activeTab === 'product_form' && ProductForm()}
-                        {activeTab === 'tags' && TagGenerator()}
-                        {activeTab === 'users' && UserManager()}
-                        {activeTab === 'scan_history' && ScanHistory()}
-                        {activeTab === 'settings' && Settings()}
+                        {activeTab === 'dashboard' && <Dashboard />}
+                        {activeTab === 'brand' && <BrandManager />}
+                        {activeTab === 'categories' && <CategoryManager />}
+                        {activeTab === 'product' && <ProductManager />}
+                        {activeTab === 'product_form' && <ProductForm />}
+                        {activeTab === 'tags' && <TagGenerator />}
+                        {activeTab === 'users' && <UserManager />}
+                        {activeTab === 'scan_history' && <ScanHistory />}
+                        {activeTab === 'settings' && <Settings />}
                     </div>
                 </div>
             </main>
