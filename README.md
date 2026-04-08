@@ -2,6 +2,18 @@
 
 Dokumentasi ini menjelaskan struktur terbaru halaman admin setelah refactor besar dari file monolitik menjadi modul-modul terpisah.
 
+## Source Of Truth Halaman Utama
+
+- Public `/`:
+  dirender oleh backend Blade `resources/views/front/page/home.blade.php`
+  melalui `LegacyFrontController@index`.
+- Login `/login`:
+  dirender oleh Inertia page `resources/js/Pages/Auth/Login.jsx`.
+- Dashboard `/adminmki`:
+  dirender oleh Inertia page `resources/js/Pages/AdminPanel.jsx`.
+- `resources/js/Layouts/GuestLayout.jsx` dipakai oleh halaman auth lain
+  (forgot/reset/verify/confirm), bukan renderer utama untuk `/login`.
+
 ## Tujuan Refactor
 
 - Mengurangi kompleksitas file utama.
