@@ -27,7 +27,7 @@ export default function Login({ status }) {
                 <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-2">
                     <div className="relative h-56 sm:h-72 lg:h-auto">
                         <img
-                            src="/images/login-cat.jpg"
+                            src="/img/contoh-maklon-parfum-mki.webp"
                             alt="MKI Dashboard Login"
                             className="h-full w-full object-cover object-center"
                         />
@@ -36,8 +36,13 @@ export default function Login({ status }) {
                     <div className="flex items-center justify-center p-8 sm:p-10 lg:p-14">
                         <div className="w-full max-w-md">
                             <div className="mb-8">
-                                <h1 className="text-3xl font-bold tracking-tight text-slate-800">MKI Dashboard</h1>
-                                <p className="mt-1 text-sm text-slate-500">Sistem Administrasi Brand &amp; Produk</p>
+                                <div className="mb-3 inline-flex items-center">
+                                    <img
+                                        src="/img/LOGO_TOP.png.webp"
+                                        alt="MKI Auth"
+                                        className="h-8 w-auto sm:h-10"
+                                    />
+                                </div>
                             </div>
 
                             {status && (

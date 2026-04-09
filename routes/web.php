@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountSettingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\LegacyFrontController;
 use App\Http\Controllers\ProductVerificationController;
 use App\Http\Controllers\ProductSkuController;
 use App\Http\Controllers\ScanActivityController;
@@ -11,12 +12,10 @@ use App\Http\Controllers\SecuritySettingController;
 use App\Http\Controllers\TagBatchController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
-// Halaman depan website publik
-Route::get('/', function () {
-    return Inertia::render('Welcome');
-})->name('home');
+// Halaman depan website publik (frontend lama)
+Route::get('/', [LegacyFrontController::class, 'index'])->name('home');
+Route::post('/kode', [LegacyFrontController::class, 'kode'])->name('kode');
 
 // Endpoint publik untuk cek keaslian kode produk
 Route::get('/verify-product-code', [ProductVerificationController::class, 'check'])

@@ -414,6 +414,11 @@ class BrandController extends Controller {
 
     private function scanActivityPayload(ScanActivity $scanActivity): array
     {
+        $locationLabel = trim((string) ($scanActivity->location_label ?? ''));
+        if ($locationLabel === '' || strcasecmp($locationLabel, 'Legacy Checker') === 0) {
+            $locationLabel = 'Tidak Diketahui';
+        }
+
         return [
             'id' => $scanActivity->id,
             'time' => optional($scanActivity->scanned_at)->format('d M Y, H:i:s'),
@@ -421,7 +426,7 @@ class BrandController extends Controller {
             'tagCode' => $scanActivity->verification_code ?: $scanActivity->scanned_code,
             'productName' => $scanActivity->product_name ?: 'Unknown / Invalid',
             'brand' => $scanActivity->brand_name ?: 'N/A',
-            'location' => $scanActivity->location_label ?: 'Tidak Diketahui',
+            'location' => $locationLabel,
             'ip' => $scanActivity->ip_address ?: '-',
             'scanCount' => (int) $scanActivity->scan_count,
             'status' => $scanActivity->result_status ?: 'Invalid',

@@ -5,7 +5,6 @@ import {
     ChevronLeft,
     AlertCircle,
     CheckCircle2,
-    ShieldCheck,
     LogOut,
     Moon,
     Sun,
@@ -2035,10 +2034,11 @@ export default function AdminPanel({
             <aside className={`fixed md:sticky top-0 left-0 z-50 h-screen ${isSidebarMinimized ? 'w-20' : 'w-64'} bg-white border-r border-slate-200 shadow-sm transition-all duration-300 flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                 <div className={`relative p-4 md:p-6 border-b border-slate-100 flex items-center ${isSidebarMinimized ? 'justify-center' : 'justify-between'}`}>
                     <div className="flex items-center gap-2 overflow-hidden">
-                        <div className="w-8 h-8 bg-gradient-to-br from-[#C1986E] to-[#8C6D4D] rounded flex items-center justify-center">
-                            <ShieldCheck className="text-white" size={20} />
-                        </div>
-                        {!isSidebarMinimized && <span className="font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-[#C1986E] to-[#604932]">MKI-Auth</span>}
+                        <img
+                            src="/img/LOGO_TOP.png"
+                            alt="MKI Site Logo"
+                            className={isSidebarMinimized ? 'w-8 h-8 object-contain rounded-sm' : 'h-8 w-auto object-contain'}
+                        />
                     </div>
                     <button className="hidden md:flex items-center justify-center absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-slate-200 text-slate-400 rounded-full shadow-sm z-50 hover:text-[#C1986E]" onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}>
                         {isSidebarMinimized ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}

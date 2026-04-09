@@ -69,7 +69,7 @@ class ProductVerificationController extends Controller
             'location_label' => $locationLabel,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
-            'ip_address' => $resolvedIpAddress ?: $request->ip(),
+            'ip_address' => $resolvedIpAddress,
             'user_agent' => $request->userAgent(),
             'scanned_at' => now(),
         ]);
@@ -132,15 +132,14 @@ class ProductVerificationController extends Controller
         ?string $requestIp
     ): string
     {
+        $labelFromCoordinates = $this->resolveLocationFromCoordinates($latitude, $longitude);
+        if ($labelFromCoordinates !== null) {
+            return $labelFromCoordinates;
+        }
+
         $label = trim((string) ($locationLabel ?? ''));
         if ($label !== '') {
             return $label;
-        }
-
-        if ($latitude !== null && $longitude !== null) {
-            $lat = number_format((float) $latitude, 5, '.', '');
-            $lng = number_format((float) $longitude, 5, '.', '');
-            return "Lat {$lat}, Lng {$lng}";
         }
 
         $labelFromIp = $this->resolveLocationFromIp($requestIp);
@@ -151,9 +150,58 @@ class ProductVerificationController extends Controller
         return 'Tidak Diketahui';
     }
 
+    private function resolveLocationFromCoordinates(mixed $latitude, mixed $longitude): ?string
+    {
+        if ($this->skipExternalLocationLookup()) {
+            return null;
+        }
+
+        if (!is_numeric($latitude) || !is_numeric($longitude)) {
+            return null;
+        }
+
+        $normalizedLat = (float) number_format((float) $latitude, 6, '.', '');
+        $normalizedLng = (float) number_format((float) $longitude, 6, '.', '');
+
+        $cacheKey = 'reverse_geo_location_' . hash('sha1', "{$normalizedLat},{$normalizedLng}");
+        $cachedValue = Cache::get($cacheKey);
+        if (is_string($cachedValue) && $cachedValue !== '') {
+            return $cachedValue;
+        }
+
+        $payload = $this->fetchReverseGeocodePayload($normalizedLat, $normalizedLng);
+        if ($payload === null) {
+            return null;
+        }
+
+        $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
+        $city = trim((string) (
+            $address['city']
+            ?? $address['town']
+            ?? $address['municipality']
+            ?? $address['village']
+            ?? $address['county']
+            ?? $address['state_district']
+            ?? $address['state']
+            ?? ''
+        ));
+        $countryCode = strtoupper(trim((string) ($address['country_code'] ?? '')));
+
+        if ($city === '' && $countryCode === '') {
+            return null;
+        }
+
+        $label = $city !== '' && $countryCode !== ''
+            ? "{$city},{$countryCode}"
+            : ($city !== '' ? $city : $countryCode);
+
+        Cache::put($cacheKey, $label, now()->addHours(6));
+        return $label;
+    }
+
     private function resolveLocationFromIp(?string $requestIp): ?string
     {
-        if (app()->environment('testing')) {
+        if ($this->skipExternalLocationLookup()) {
             return null;
         }
 
@@ -193,8 +241,8 @@ class ProductVerificationController extends Controller
             return $requestIp;
         }
 
-        if (app()->environment('testing')) {
-            return $requestIp !== '' ? $requestIp : null;
+        if ($this->skipExternalLocationLookup()) {
+            return null;
         }
 
         $forwardedIp = $this->firstPublicIpFromForwardedHeaders($request);
@@ -207,7 +255,7 @@ class ProductVerificationController extends Controller
             return $publicIpFromApi;
         }
 
-        return $requestIp !== '' ? $requestIp : null;
+        return null;
     }
 
     private function firstPublicIpFromForwardedHeaders(Request $request): ?string
@@ -281,6 +329,33 @@ class ProductVerificationController extends Controller
         return null;
     }
 
+    private function fetchReverseGeocodePayload(float $latitude, float $longitude): ?array
+    {
+        try {
+            $response = Http::timeout(3)
+                ->acceptJson()
+                ->withHeaders([
+                    'User-Agent' => 'mki-location-resolver/1.0',
+                ])
+                ->get('https://nominatim.openstreetmap.org/reverse', [
+                    'format' => 'jsonv2',
+                    'lat' => $latitude,
+                    'lon' => $longitude,
+                    'zoom' => 10,
+                    'addressdetails' => 1,
+                ]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!$response->ok()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        return is_array($payload) ? $payload : null;
+    }
+
     private function fetchIpApiPayload(?string $ip, string $fields): ?array
     {
         $endpoint = $ip !== null && $ip !== ''
@@ -308,5 +383,10 @@ class ProductVerificationController extends Controller
     private function isPublicIp(string $ip): bool
     {
         return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+    }
+
+    private function skipExternalLocationLookup(): bool
+    {
+        return app()->environment(['testing']);
     }
 }

@@ -1,0 +1,204 @@
+@font-face {
+    font-family: 'Optima';
+    src: url('../font/Optima.eot');
+    src: url('../font/Optima.eot?#iefix') format('embedded-opentype'),
+        url('../font/Optima.woff2') format('woff2'),
+        url('../font/Optima.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+body {
+    font-family: 'roboto';
+}
+h1,h2{
+    font-family: 'Optima';
+    font-weight: bold;
+    color: #666666;
+}
+h1{
+    font-size: 50px;
+    margin-bottom:40px;
+}
+h2{
+    font-size: 32px;
+}
+p {
+    font-family: 'roboto';
+    color: #575250;
+        line-height: 1.7;
+}
+.optima-bold{
+    font-family: 'Optima';
+    font-weight: bold;
+} 
+.font-orange{
+    color: #A57B52;
+}
+.blok-cek{
+    background: #F2F2F2;
+    margin-top: 30px;
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #e6e6e6;
+    min-height: 210px;
+}
+.blok-fitur{
+    background: #fff;
+    padding: 40px;
+    border-radius: 10px;
+    border: 2px solid #ccc;
+    height: calc(100% - 30px);
+}
+.align-items-center {
+  -ms-flex-align: center!important;
+  align-items: center!important;
+  flex-wrap: nowrap;
+    justify-content: center;
+}
+th {
+    background: #F2F2F2 !important;
+    box-shadow: unset !important;
+    text-align: center;
+    border-bottom: 3px solid #ccc !important;
+    color: #A57B52 !important;
+}
+.table>:not(caption)>*>* {
+    padding: 15px;
+    padding: 16px;
+}
+.table-striped>tbody>tr:nth-of-type(odd)>* {
+    --bs-table-accent-bg: #f8f8f8 !important;
+    border: unset;
+}
+td{
+    font-family: "Inter", sans-serif;
+    font-weight:bold;
+    color: #6C6D70 !important;
+    border: unset !important;
+}
+
+.tooltipku {
+  position: relative;
+  display: inline-block;
+  border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+}
+
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltipku:hover .tooltiptext {
+  visibility: visible;
+}
+
+.tooltipku .tooltiptext {
+    visibility: hidden;
+    width: 500px;
+    background-color: #111;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    position: absolute;
+    z-index: 1;
+    bottom: 130%;
+    left: 50%;
+    margin-left: -250px;
+}
+.tooltipku .tooltiptext::after {
+  content: " ";
+  position: absolute;
+  top: 100%; /* At the bottom of the tooltip */
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: black transparent transparent transparent;
+}
+.list-gold li{
+    margin: 0;
+    padding: 13px 0px 13px 51px;
+    list-style: none;
+    background-image: url("../../img/cek-gold-mki.png");
+    background-repeat: no-repeat;
+    background-position: left center;
+    background-size: 26px;
+    margin-left: -26px;
+    color: #575250;
+    font-family: 'Roboto';
+}
+
+button.accordion-button {
+    font-family: 'Optima';
+    font-size: 24px;
+    color: #666 !important;
+    background: #fff !important;
+    border: unset;
+    outline: none !important;
+    box-shadow: none  !important;
+    border-top: 2px solid #ccc;
+}
+.accordion-item {
+    margin-bottom: 20px;
+    border: 2px solid  #ccc;
+    box-shadow: unset;
+    outline: unset !important;
+    outline: none !important;
+    box-shadow: none  !important;
+    border-top: none;
+}
+
+.dek{
+    display:block;
+}
+.mob{
+    display:none;
+}
+.hero{
+    background-size: contain !important;
+    height: 80vh;
+    background-repeat: no-repeat !important;
+}
+.hero .isi{
+    height: 80vh;display: flex;align-items: center;flex-wrap: wrap;align-content: center;
+}
+.accordion-button::after{
+    background-image: url("data:image/svg+xml,%3Csvg%20class%3D%22e-font-icon-svg%20e-fas-plus%22%20viewBox%3D%220%200%20448%20512%22%20%20fill%3D%22%23C2986B%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M416%20208H272V64c0-17.67-14.33-32-32-32h-32c-17.67%200-32%2014.33-32%2032v144H32c-17.67%200-32%2014.33-32%2032v32c0%2017.67%2014.33%2032%2032%2032h144v144c0%2017.67%2014.33%2032%2032%2032h32c17.67%200%2032-14.33%2032-32V304h144c17.67%200%2032-14.33%2032-32v-32c0-17.67-14.33-32-32-32z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    background-size: 11px;
+    border: 1px solid #C2986B;
+    border-radius: 100%;
+    width: 25px !important;
+    height: 25px !important;
+    background-position: center;
+}
+.accordion-button:not(.collapsed)::after{
+    background-image: url("data:image/svg+xml,%3Csvg%20fill%3D%22%23C2986B%22%20class%3D%22elementor-toggle-icon-opened%20e-font-icon-svg%20e-fas-minus%22%20viewBox%3D%220%200%20448%20512%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M416%20208H32c-17.67%200-32%2014.33-32%2032v32c0%2017.67%2014.33%2032%2032%2032h384c17.67%200%2032-14.33%2032-32v-32c0-17.67-14.33-32-32-32z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E");
+    background-size: 11px;
+    border: 1px solid #C2986B;
+    border-radius: 100%;
+    width: 25px !important;
+    height: 25px !important;
+    background-position: center;
+}
+@media (max-width: 760px) {
+    .hero .isi {
+        height: auto;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        align-content: flex-start;
+    }
+    h1 {
+        font-size: 34px;
+        margin-bottom: 20px;
+    }
+    .hero{
+        background:#F2F2F2 !important;
+        height: auto;
+    }
+    .dek{
+        display:none;
+    }
+    .mob{
+        display:block;
+    }
+}
