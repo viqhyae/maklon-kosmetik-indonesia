@@ -57,6 +57,7 @@ class LegacyFrontController extends Controller
         } elseif ($scanCountAfter > 3) {
             $scanStatus = 'Peringatan';
         }
+        $suspendReason = $this->resolveSuspendReason($tagCode);
 
         $coordinates = $this->extractCoordinatesFromRequest($request);
         $resolvedIpAddress = $this->resolveClientIpAddress($request);
@@ -74,6 +75,7 @@ class LegacyFrontController extends Controller
             'brand_name' => $tagCode->brand_name,
             'tag_status' => $tagCode->status,
             'result_status' => $scanStatus,
+            'suspend_reason' => $suspendReason,
             'scan_count' => $scanCountAfter,
             'location_label' => $geo['location_label'] ?? 'Tidak Diketahui',
             'latitude' => $coordinates['latitude'] ?? ($geo['latitude'] ?? null),
@@ -89,6 +91,16 @@ class LegacyFrontController extends Controller
             'tgl2' => isset($timestamps[1]) ? $timestamps[1]->format('d M Y H:i:s') : '-',
             'tgl3' => isset($timestamps[2]) ? $timestamps[2]->format('d M Y H:i:s') : '-',
         ], 200);
+    }
+
+    private function resolveSuspendReason(TagCode $tagCode): ?string
+    {
+        if (strtolower(trim((string) $tagCode->status)) !== 'suspended') {
+            return null;
+        }
+
+        $resolvedReason = trim((string) ($tagCode->batch?->suspend_reason ?? ''));
+        return $resolvedReason !== '' ? $resolvedReason : null;
     }
 
     private function resolveLocation(?string $candidateIp, ?float $latitude, ?float $longitude): array

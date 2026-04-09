@@ -15,6 +15,7 @@ class ScanActivity extends Model
         'brand_name',
         'tag_status',
         'result_status',
+        'suspend_reason',
         'scan_count',
         'location_label',
         'latitude',

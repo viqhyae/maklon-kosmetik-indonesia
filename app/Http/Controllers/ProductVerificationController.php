@@ -47,6 +47,7 @@ class ProductVerificationController extends Controller
         $resultStatus = $tagCode
             ? $this->determineResultStatus((string) ($tagCode->status ?? 'Aktif'), $scanCount, $maxValidScanLimit)
             : 'Invalid';
+        $suspendReason = $this->resolveSuspendReason($tagCode);
 
         $resolvedIpAddress = $this->resolveClientIpAddress($request);
 
@@ -65,6 +66,7 @@ class ProductVerificationController extends Controller
             'brand_name' => $tagCode?->brand_name,
             'tag_status' => $tagCode?->status,
             'result_status' => $resultStatus,
+            'suspend_reason' => $suspendReason,
             'scan_count' => $scanCount,
             'location_label' => $locationLabel,
             'latitude' => $validated['latitude'] ?? null,
@@ -109,6 +111,16 @@ class ProductVerificationController extends Controller
         }
 
         return 'Peringatan';
+    }
+
+    private function resolveSuspendReason(?TagCode $tagCode): ?string
+    {
+        if (!$tagCode || strtolower(trim((string) $tagCode->status)) !== 'suspended') {
+            return null;
+        }
+
+        $resolvedReason = trim((string) ($tagCode->batch?->suspend_reason ?? ''));
+        return $resolvedReason !== '' ? $resolvedReason : null;
     }
 
     private function getMaxValidScanLimit(): int

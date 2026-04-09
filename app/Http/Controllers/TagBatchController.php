@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class TagBatchController extends Controller
 {
@@ -110,14 +111,23 @@ class TagBatchController extends Controller
 
         $validated = $request->validate([
             'status' => ['required', 'string', Rule::in(['Generated', 'Suspended'])],
+            'suspend_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $batchStatus = (string) $validated['status'];
+        $suspendReason = trim((string) ($validated['suspend_reason'] ?? ''));
+        if ($batchStatus === 'Suspended' && $suspendReason === '') {
+            throw ValidationException::withMessages([
+                'suspend_reason' => ['Alasan suspend wajib diisi.'],
+            ]);
+        }
+
         $codeStatus = $batchStatus === 'Suspended' ? 'Suspended' : 'Aktif';
 
-        DB::transaction(function () use ($tagBatch, $batchStatus, $codeStatus) {
+        DB::transaction(function () use ($tagBatch, $batchStatus, $codeStatus, $suspendReason) {
             $tagBatch->update([
                 'status' => $batchStatus,
+                'suspend_reason' => $batchStatus === 'Suspended' ? $suspendReason : null,
             ]);
 
             TagCode::query()
@@ -222,6 +232,7 @@ class TagBatchController extends Controller
             'firstCode' => $tagBatch->first_code,
             'lastCode' => $tagBatch->last_code,
             'status' => $tagBatch->status,
+            'suspendReason' => $tagBatch->suspend_reason ?: null,
             'settings' => [
                 'randomLength' => (int) $tagBatch->id_length . ' Karakter',
             ],

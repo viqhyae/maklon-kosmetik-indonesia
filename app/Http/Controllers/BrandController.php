@@ -377,6 +377,7 @@ class BrandController extends Controller {
             'firstCode' => $tagBatch->first_code,
             'lastCode' => $tagBatch->last_code,
             'status' => $tagBatch->status,
+            'suspendReason' => $tagBatch->suspend_reason ?: null,
             'settings' => [
                 'randomLength' => (int) $tagBatch->id_length . ' Karakter',
             ],
@@ -431,6 +432,7 @@ class BrandController extends Controller {
             'scanCount' => (int) $scanActivity->scan_count,
             'status' => $scanActivity->result_status ?: 'Invalid',
             'tagStatus' => $scanActivity->tag_status ?: '-',
+            'suspendReason' => $scanActivity->suspend_reason ?: null,
             'userAgent' => $scanActivity->user_agent ?: '-',
             'latitude' => $scanActivity->latitude,
             'longitude' => $scanActivity->longitude,

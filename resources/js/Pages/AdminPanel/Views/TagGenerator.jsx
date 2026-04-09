@@ -47,10 +47,22 @@ export default function createTagGenerator(context) {
         setTagConfig,
         showToast,
         SortIcon,
+        suspendReasonModal,
+        setSuspendReasonModal,
         tagConfig,
         Tooltip,
     } = context;
     const TagGenerator = () => {
+        const [suspendReasonInput, setSuspendReasonInput] = React.useState('');
+
+        const closeSuspendReasonModal = () => {
+            setSuspendReasonInput('');
+            setSuspendReasonModal({
+                isOpen: false,
+                batchId: '',
+            });
+        };
+
         const handleDeleteBatch = (batchId) => {
             if (isBatchPendingAction(batchId)) return;
 
@@ -83,6 +95,50 @@ export default function createTagGenerator(context) {
             });
         };
 
+        const submitBatchStatusChange = (batchId, nextStatus, suspendReason = null) => {
+            if (isBatchPendingAction(batchId)) return;
+
+            const previousBatchesSnapshot = batches;
+            const normalizedReason = String(suspendReason ?? '').trim();
+            const isSuspending = nextStatus === 'Suspended';
+
+            setBatchPendingAction(batchId, true);
+            setBatches((currentBatches) =>
+                currentBatches.map((batch) =>
+                    isSameEntityId(batch.id, batchId)
+                        ? {
+                            ...batch,
+                            status: nextStatus,
+                            suspendReason: isSuspending ? normalizedReason : '',
+                        }
+                        : batch
+                )
+            );
+
+            axios.post(`/tag-batches/${batchId}/status`, {
+                status: nextStatus,
+                suspend_reason: isSuspending ? normalizedReason : null,
+            })
+                .then((response) => {
+                    const savedBatch = normalizeBatchRecord(response?.data?.batch || {});
+                    setBatches((currentBatches) =>
+                        currentBatches.map((batch) =>
+                            isSameEntityId(batch.id, batchId) ? savedBatch : batch
+                        )
+                    );
+                    showToast(`Status batch ${batchId} berhasil diubah!`);
+                })
+                .catch((error) => {
+                    setBatches(previousBatchesSnapshot);
+                    const errors = error?.response?.data?.errors || {};
+                    const fallbackMessage = String(error?.response?.data?.message || '').trim() || "Gagal mengubah status batch.";
+                    showToast(getFirstErrorMessage(errors, fallbackMessage), "error");
+                })
+                .finally(() => {
+                    setBatchPendingAction(batchId, false);
+                });
+        };
+
         const handleToggleBatchStatus = (batchId, currentStatus) => {
             if (isBatchPendingAction(batchId)) return;
 
@@ -97,34 +153,37 @@ export default function createTagGenerator(context) {
                 onConfirm: () => {
                     if (isBatchPendingAction(batchId)) return;
 
-                    const previousBatchesSnapshot = batches;
-                    setBatchPendingAction(batchId, true);
-                    setBatches((currentBatches) =>
-                        currentBatches.map((batch) =>
-                            isSameEntityId(batch.id, batchId) ? { ...batch, status: nextStatus } : batch
-                        )
-                    );
-
-                    axios.post(`/tag-batches/${batchId}/status`, { status: nextStatus })
-                        .then((response) => {
-                            const savedBatch = normalizeBatchRecord(response?.data?.batch || {});
-                            setBatches((currentBatches) =>
-                                currentBatches.map((batch) =>
-                                    isSameEntityId(batch.id, batchId) ? savedBatch : batch
-                                )
-                            );
-                            showToast(`Status batch ${batchId} berhasil diubah!`);
-                        })
-                        .catch((error) => {
-                            setBatches(previousBatchesSnapshot);
-                            const errors = error?.response?.data?.errors || {};
-                            showToast(getFirstErrorMessage(errors, "Gagal mengubah status batch."), "error");
-                        })
-                        .finally(() => {
-                            setBatchPendingAction(batchId, false);
+                    if (isSuspending) {
+                        setSuspendReasonInput('');
+                        setSuspendReasonModal({
+                            isOpen: true,
+                            batchId: String(batchId),
                         });
+                        return;
+                    }
+
+                    submitBatchStatusChange(batchId, nextStatus);
                 }
             });
+        };
+
+        const handleConfirmSuspendWithReason = () => {
+            const batchId = String(suspendReasonModal.batchId || '').trim();
+            if (batchId === '') {
+                closeSuspendReasonModal();
+                return;
+            }
+
+            if (isBatchPendingAction(batchId)) return;
+
+            const normalizedReason = String(suspendReasonInput || '').trim();
+            if (normalizedReason === '') {
+                showToast("Alasan suspend wajib diisi.", "error");
+                return;
+            }
+
+            closeSuspendReasonModal();
+            submitBatchStatusChange(batchId, 'Suspended', normalizedReason);
         };
 
         const handleDownloadBatchPdf = async (batchId) => {
@@ -258,6 +317,10 @@ export default function createTagGenerator(context) {
             }
             return 0;
         });
+        const suspendReasonLength = String(suspendReasonInput || '').length;
+        const suspendReasonWarningMessage = suspendReasonModal.batchId
+            ? `PERINGATAN: Menonaktifkan batch ${suspendReasonModal.batchId} akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan.`
+            : 'PERINGATAN: Menonaktifkan batch akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan.';
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -431,6 +494,79 @@ export default function createTagGenerator(context) {
                     </table>
                 </div>
 
+                {suspendReasonModal.isOpen && (
+                    <div
+                        className="fixed inset-0 z-[320] flex items-start justify-center bg-black/50 backdrop-blur-sm px-4 pb-4 pt-0 overflow-y-auto"
+                        onClick={closeSuspendReasonModal}
+                    >
+                        <div
+                            className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[96vh]"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="bg-slate-50 border-b border-slate-100 p-5">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                                    <AlertCircle size={18} /> Alasan Suspend Batch
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Silakan isi alasan suspend agar tampil di preview Brand Owner dan detail aktivitas scan.
+                                </p>
+                            </div>
+
+                            <div className="p-5 space-y-4">
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                    <p className="text-sm font-medium text-red-800 leading-relaxed">
+                                        {suspendReasonWarningMessage}
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">
+                                        Alasan Suspend <span className="text-red-500">*</span>
+                                    </label>
+                                    <textarea
+                                        rows={4}
+                                        maxLength={1000}
+                                        autoFocus
+                                        dir="ltr"
+                                        value={suspendReasonInput}
+                                        onChange={(event) => {
+                                            setSuspendReasonInput(event.target.value);
+                                        }}
+                                        style={{ unicodeBidi: 'plaintext' }}
+                                        className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm resize-y min-h-[110px] text-left"
+                                        placeholder="Contoh: Ditemukan indikasi penyalahgunaan distribusi pada batch ini."
+                                    />
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-[11px] text-slate-500">
+                                            Alasan ini akan disimpan di data batch dan log scan.
+                                        </p>
+                                        <p className={`text-[11px] font-medium ${suspendReasonLength > 950 ? 'text-slate-600' : 'text-slate-400'}`}>
+                                            {suspendReasonLength}/1000
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeSuspendReasonModal}
+                                    className="flex-1 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 text-sm"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmSuspendWithReason}
+                                    className="flex-1 py-2.5 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-all shadow-sm active:scale-95 text-sm"
+                                >
+                                    Ya, Suspend Batch
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {selectedBatchDetail && (
                     <div
                         className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
@@ -450,7 +586,7 @@ export default function createTagGenerator(context) {
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar">
-                                <div className="flex flex-col md:flex-row gap-8">
+                                <div className="flex flex-col md:flex-row gap-8 md:items-stretch">
                                     <div className="w-full md:w-1/3 flex flex-col gap-4 shrink-0">
                                         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center shadow-inner">
                                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Batch ID</p>
@@ -465,7 +601,7 @@ export default function createTagGenerator(context) {
                                             <p className="text-xs font-medium text-blue-600 mt-1">Tag Keamanan</p>
                                         </div>
 
-                                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm md:flex-1">
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">Status Batch</p>
                                             {selectedBatchDetail.status === 'Generated' ? (
                                                 <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1">
@@ -477,6 +613,7 @@ export default function createTagGenerator(context) {
                                                 </span>
                                             )}
                                         </div>
+
                                     </div>
 
                                     <div className="w-full md:w-2/3 flex flex-col">
@@ -490,6 +627,15 @@ export default function createTagGenerator(context) {
                                         </div>
 
                                         <div className="space-y-6">
+                                            {selectedBatchDetail.status === 'Suspended' && (
+                                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+                                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Alasan Suspend</p>
+                                                    <p className="text-sm font-medium text-slate-700 whitespace-pre-wrap break-words leading-relaxed">
+                                                        {selectedBatchDetail.suspendReason || '-'}
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             <div>
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
                                                     <Key size={14} className="text-slate-400" /> Rentang Kode Batch

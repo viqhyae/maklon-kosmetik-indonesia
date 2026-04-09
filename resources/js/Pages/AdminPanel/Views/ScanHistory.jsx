@@ -150,7 +150,7 @@ export default function createScanHistory(context) {
             : null;
 
         const handleExportCsv = () => {
-            const csvHeader = ['Waktu', 'Kode', 'Produk', 'Brand', 'Lokasi', 'Latitude', 'Longitude', 'IP', 'Scan Ke', 'Status'];
+            const csvHeader = ['Waktu', 'Kode', 'Produk', 'Brand', 'Lokasi', 'Latitude', 'Longitude', 'IP', 'Scan Ke', 'Status', 'Alasan Suspend'];
             const csvRows = processedLogs.map((log) => {
                 const coordinates = getLogCoordinates(log);
                 const latitude = coordinates ? coordinates.lat.toFixed(6) : '-';
@@ -167,6 +167,7 @@ export default function createScanHistory(context) {
                 log.ip || '-',
                 String(log.scanCount ?? 0),
                 log.status || '-',
+                log.suspendReason || '-',
                 ];
             });
 
@@ -353,8 +354,8 @@ export default function createScanHistory(context) {
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar">
-                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-stretch">
+                                    <div className="space-y-4 xl:h-full xl:flex xl:flex-col">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Waktu Scan</p>
@@ -401,6 +402,15 @@ export default function createScanHistory(context) {
                                             )}
                                         </div>
 
+                                        {previewLog.status === 'Suspended' && (
+                                            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Alasan Suspend</p>
+                                                <p className="text-sm font-semibold text-slate-700 mt-1 whitespace-pre-wrap break-words">
+                                                    {previewLog.suspendReason || '-'}
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lokasi</p>
                                             <p className="text-sm font-semibold text-slate-800 mt-1">{previewLog.location || '-'}</p>
@@ -410,8 +420,8 @@ export default function createScanHistory(context) {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-3">
-                                        <div className="h-[320px] md:h-[420px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                                    <div className="space-y-3 xl:h-full xl:flex xl:flex-col">
+                                        <div className="h-[320px] md:h-[420px] xl:h-auto xl:flex-1 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                                             {previewMapEmbedUrl ? (
                                                 <iframe
                                                     src={previewMapEmbedUrl}

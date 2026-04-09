@@ -200,7 +200,7 @@ export default function createProductManager(context) {
                             </div>
 
                             <div className="p-6 overflow-y-auto custom-scrollbar">
-                                <div className="flex flex-col md:flex-row gap-8">
+                                <div className="flex flex-col md:flex-row gap-8 md:items-stretch">
                                     {/* Kolom Kiri: Visual & Statistik Utama */}
                                     <div className="w-full md:w-1/3 flex flex-col gap-4 shrink-0">
                                         <div className="w-full aspect-square bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400 shadow-inner overflow-hidden">
@@ -214,7 +214,7 @@ export default function createProductManager(context) {
                                             )}
                                         </div>
 
-                                        <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm">
+                                        <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm md:flex-1">
                                             <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest mb-1.5">Total Tag QR Dibuat</p>
                                             <p className="text-3xl font-extrabold text-blue-700 leading-none">
                                                 {new Intl.NumberFormat('id-ID').format(

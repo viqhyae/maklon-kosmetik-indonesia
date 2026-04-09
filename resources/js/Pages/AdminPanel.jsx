@@ -63,6 +63,10 @@ export default function AdminPanel({
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [selectedProductDetail, setSelectedProductDetail] = useState(null);
     const [selectedBatchDetail, setSelectedBatchDetail] = useState(null);
+    const [suspendReasonModal, setSuspendReasonModal] = useState({
+        isOpen: false,
+        batchId: '',
+    });
 
     // --- STATE MODAL PICKER KATEGORI (BARU) ---
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -147,6 +151,7 @@ export default function AdminPanel({
         firstCode: batch?.firstCode || '',
         lastCode: batch?.lastCode || '',
         status: batch?.status === 'Suspended' ? 'Suspended' : 'Generated',
+        suspendReason: String(batch?.suspendReason || batch?.suspend_reason || '').trim(),
         settings: {
             randomLength: normalizeBatchRandomLength(batch?.settings),
         },
@@ -180,6 +185,7 @@ export default function AdminPanel({
         scanCount: Number(log?.scanCount || 0),
         status: String(log?.status || 'Invalid').trim() || 'Invalid',
         tagStatus: String(log?.tagStatus || '-').trim() || '-',
+        suspendReason: String(log?.suspendReason || log?.suspend_reason || '').trim(),
         userAgent: String(log?.userAgent || '-').trim() || '-',
         latitude: log?.latitude ?? null,
         longitude: log?.longitude ?? null,
@@ -196,6 +202,7 @@ export default function AdminPanel({
         Number(left?.scanCount || 0) === Number(right?.scanCount || 0) &&
         String(left?.status || '') === String(right?.status || '') &&
         String(left?.tagStatus || '') === String(right?.tagStatus || '') &&
+        String(left?.suspendReason || '') === String(right?.suspendReason || '') &&
         String(left?.userAgent || '') === String(right?.userAgent || '') &&
         Number(left?.latitude ?? NaN) === Number(right?.latitude ?? NaN) &&
         Number(left?.longitude ?? NaN) === Number(right?.longitude ?? NaN)
@@ -1952,6 +1959,8 @@ export default function AdminPanel({
         setScanSort,
         selectedBatchDetail,
         setSelectedBatchDetail,
+        suspendReasonModal,
+        setSuspendReasonModal,
         markBrandLogoBroken,
         buildBrandLogoSrc,
         buildProductImageUrl,

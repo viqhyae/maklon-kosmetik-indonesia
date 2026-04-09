@@ -52,6 +52,7 @@ class ScanActivityController extends Controller
             'scanCount' => (int) $scanActivity->scan_count,
             'status' => $scanActivity->result_status ?: 'Invalid',
             'tagStatus' => $scanActivity->tag_status ?: '-',
+            'suspendReason' => $scanActivity->suspend_reason ?: null,
             'userAgent' => $scanActivity->user_agent ?: '-',
             'latitude' => $scanActivity->latitude,
             'longitude' => $scanActivity->longitude,

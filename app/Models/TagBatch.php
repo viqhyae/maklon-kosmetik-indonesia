@@ -18,6 +18,7 @@ class TagBatch extends Model
         'use_pin',
         'pin_length',
         'status',
+        'suspend_reason',
         'first_code',
         'last_code',
         'created_by',
