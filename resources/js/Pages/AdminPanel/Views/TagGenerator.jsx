@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
     AlertCircle,
     CheckCircle2,
@@ -494,77 +495,82 @@ export default function createTagGenerator(context) {
                     </table>
                 </div>
 
-                {suspendReasonModal.isOpen && (
+                {typeof document !== 'undefined' && suspendReasonModal.isOpen && createPortal(
                     <div
-                        className="fixed inset-0 z-[320] flex items-start justify-center bg-black/50 backdrop-blur-sm px-4 pb-4 pt-0 overflow-y-auto"
+                        className="fixed inset-0 z-[320] bg-black/50 backdrop-blur-md"
                         onClick={closeSuspendReasonModal}
                     >
-                        <div
-                            className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[96vh]"
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <div className="bg-slate-50 border-b border-slate-100 p-5">
-                                <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                                    <AlertCircle size={18} /> Alasan Suspend Batch
-                                </h3>
-                                <p className="text-sm text-slate-500 mt-1">
-                                    Silakan isi alasan suspend agar tampil di preview Brand Owner dan detail aktivitas scan.
-                                </p>
-                            </div>
-
-                            <div className="p-5 space-y-4">
-                                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                                    <p className="text-sm font-medium text-red-800 leading-relaxed">
-                                        {suspendReasonWarningMessage}
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-500 uppercase">
-                                        Alasan Suspend <span className="text-red-500">*</span>
-                                    </label>
-                                    <textarea
-                                        rows={4}
-                                        maxLength={1000}
-                                        autoFocus
-                                        dir="ltr"
-                                        value={suspendReasonInput}
-                                        onChange={(event) => {
-                                            setSuspendReasonInput(event.target.value);
-                                        }}
-                                        style={{ unicodeBidi: 'plaintext' }}
-                                        className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm resize-y min-h-[110px] text-left"
-                                        placeholder="Contoh: Ditemukan indikasi penyalahgunaan distribusi pada batch ini."
-                                    />
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-[11px] text-slate-500">
-                                            Alasan ini akan disimpan di data batch dan log scan.
+                        <div className="h-full w-full overflow-y-auto">
+                            <div className="min-h-full flex items-center justify-center p-4">
+                                <div
+                                    className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[96vh] max-h-[calc(100dvh-2rem)]"
+                                    onClick={(event) => event.stopPropagation()}
+                                >
+                                    <div className="bg-slate-50 border-b border-slate-100 p-5">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                                            <AlertCircle size={18} /> Alasan Suspend Batch
+                                        </h3>
+                                        <p className="text-sm text-slate-500 mt-1">
+                                            Silakan isi alasan suspend agar tampil di preview Brand Owner dan detail aktivitas scan.
                                         </p>
-                                        <p className={`text-[11px] font-medium ${suspendReasonLength > 950 ? 'text-slate-600' : 'text-slate-400'}`}>
-                                            {suspendReasonLength}/1000
-                                        </p>
+                                    </div>
+
+                                    <div className="p-5 space-y-4">
+                                        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                                            <p className="text-sm font-medium text-red-800 leading-relaxed">
+                                                {suspendReasonWarningMessage}
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500 uppercase">
+                                                Alasan Suspend <span className="text-red-500">*</span>
+                                            </label>
+                                            <textarea
+                                                rows={4}
+                                                maxLength={1000}
+                                                autoFocus
+                                                dir="ltr"
+                                                value={suspendReasonInput}
+                                                onChange={(event) => {
+                                                    setSuspendReasonInput(event.target.value);
+                                                }}
+                                                style={{ unicodeBidi: 'plaintext' }}
+                                                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] text-sm resize-y min-h-[110px] text-left"
+                                                placeholder="Contoh: Ditemukan indikasi penyalahgunaan distribusi pada batch ini."
+                                            />
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[11px] text-slate-500">
+                                                    Alasan ini akan disimpan di data batch dan log scan.
+                                                </p>
+                                                <p className={`text-[11px] font-medium ${suspendReasonLength > 950 ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                    {suspendReasonLength}/1000
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={closeSuspendReasonModal}
+                                            className="flex-1 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 text-sm"
+                                        >
+                                            Batal
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleConfirmSuspendWithReason}
+                                            className="flex-1 py-2.5 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-all shadow-sm active:scale-95 text-sm"
+                                        >
+                                            Ya, Suspend Batch
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={closeSuspendReasonModal}
-                                    className="flex-1 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 text-sm"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleConfirmSuspendWithReason}
-                                    className="flex-1 py-2.5 rounded-lg font-medium text-white bg-red-600 hover:bg-red-700 transition-all shadow-sm active:scale-95 text-sm"
-                                >
-                                    Ya, Suspend Batch
-                                </button>
-                            </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
 
                 {selectedBatchDetail && (
