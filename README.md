@@ -44,7 +44,7 @@ Pastikan tools ini sudah terpasang:
 1. Clone repository dari GitHub.
 
 ```bash
-git clone <URL_REPOSITORY_GITHUB> mki
+git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
 ```
 
@@ -109,7 +109,7 @@ composer run dev
 1. Clone dan masuk ke folder project.
 
 ```bash
-git clone <URL_REPOSITORY_GITHUB> mki
+git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
 ```
 
@@ -186,7 +186,7 @@ Setelah itu login ke `/login`.
 ### Clone pertama kali
 
 ```bash
-git clone <URL_REPOSITORY_GITHUB> mki
+git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
 ```
 
@@ -346,4 +346,3 @@ routes/
 - Jangan edit file hasil build di `public/build`
 - Lakukan backup DB sebelum migrasi di environment produksi
 - Simpan kredensial `.env` di secret manager, jangan commit ke GitHub
-
