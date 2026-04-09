@@ -12,7 +12,7 @@ MKI Dashboard adalah panel admin berbasis Laravel + Inertia React untuk:
 - Manajemen user dan role (`Super Admin`, `Brand Owner`)
 - Pengaturan keamanan aplikasi
 
-## Teknologi
+## Stack
 
 - PHP 8.2+ (composer requirement)
 - Laravel 12
