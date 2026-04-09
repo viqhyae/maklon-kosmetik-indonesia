@@ -1,349 +1,349 @@
-# Dokumentasi Arsitektur MKI-DASHBOARD
+# MKI Dashboard
 
-Dokumentasi ini menjelaskan struktur terbaru halaman admin setelah refactor besar dari file monolitik menjadi modul-modul terpisah.
+Dokumentasi ini disusun untuk kebutuhan instalasi, operasional, dan maintenance project `mki` agar onboarding developer dan handover tim lebih mudah.
 
-## Source Of Truth Halaman Utama
+## Ringkasan
 
-- Public `/`:
-  dirender oleh backend Blade `resources/views/front/page/home.blade.php`
-  melalui `LegacyFrontController@index`.
-- Login `/login`:
-  dirender oleh Inertia page `resources/js/Pages/Auth/Login.jsx`.
-- Dashboard `/adminmki`:
-  dirender oleh Inertia page `resources/js/Pages/AdminPanel.jsx`.
-- `resources/js/Layouts/GuestLayout.jsx` dipakai oleh halaman auth lain
-  (forgot/reset/verify/confirm), bukan renderer utama untuk `/login`.
+MKI Dashboard adalah panel admin berbasis Laravel + Inertia React untuk:
 
-## Tujuan Refactor
+- Manajemen master data brand, kategori, dan SKU produk
+- Generate batch Tag/QR
+- Monitoring aktivitas scan produk
+- Manajemen user dan role (`Super Admin`, `Brand Owner`)
+- Pengaturan keamanan aplikasi
 
-- Mengurangi kompleksitas file utama.
-- Memisahkan tanggung jawab antara _container_, _view_, _sidebar config_, _komponen reusable_, dan _config data_.
-- Mempermudah maintenance oleh developer lain.
-- Menjaga perilaku aplikasi tetap sama (tanpa perubahan fitur).
+## Teknologi
 
-## Cara Pemakaian
+- PHP 8.2+ (composer requirement)
+- Laravel 12
+- React 18 + Inertia.js
+- Vite
+- MySQL 8 (untuk setup Docker)
+- Docker Compose (opsional)
 
-### Prasyarat
+## URL Penting
 
-- PHP 8.2+
+- Public homepage: `/`
+- Login: `/login`
+- Dashboard admin: `/adminmki`
+- Verifikasi produk publik: `/verify-product-code`
+
+## Prasyarat
+
+Pastikan tools ini sudah terpasang:
+
+- Git
 - Composer
 - Node.js + npm
-- Database MySQL/MariaDB (atau SQLite sesuai konfigurasi `.env`)
+- PHP 8.2+
+- MySQL/MariaDB (jika tanpa Docker)
+- Docker Desktop + Docker Compose (jika pakai Docker)
 
-### Menjalankan Project (Lokal)
+## Instalasi Lokal (Tanpa Docker)
 
-1. Install dependency backend dan frontend:
+1. Clone repository dari GitHub.
+
+```bash
+git clone <URL_REPOSITORY_GITHUB> mki
+cd mki
+```
+
+2. Install dependency backend dan frontend.
 
 ```bash
 composer install
 npm install
 ```
 
-2. Buat file environment:
+3. Buat file environment.
 
 ```bash
 cp .env.example .env
+# PowerShell:
+# Copy-Item .env.example .env
 ```
 
-3. Generate app key:
+4. Konfigurasi `.env` (minimal `APP_URL`, `DB_*`).
+
+Contoh MySQL lokal:
+
+```env
+APP_URL=http://127.0.0.1:8000
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=laravel
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+5. Generate key, migrate database, dan link storage.
 
 ```bash
 php artisan key:generate
+php artisan migrate
+php artisan storage:link
 ```
 
-4. Atur koneksi database di `.env`, lalu jalankan migrasi + seeder:
-
-```bash
-php artisan migrate --seed
-```
-
-5. Jalankan aplikasi:
+6. Jalankan mode development.
 
 ```bash
 composer run dev
 ```
 
-Setelah itu akses aplikasi di URL Laravel Anda (umumnya `http://127.0.0.1:8000`).
+`composer run dev` akan menjalankan:
 
-### Menjalankan dengan Docker (Sail)
+- Laravel server
+- Queue listener
+- Log tail (`pail`)
+- Vite dev server
 
-1. Jalankan container:
+## Instalasi dengan Docker
 
-```bash
-docker compose up -d
-```
+`docker-compose.yml` pada project ini memakai service:
 
-2. Install dependency:
+- `app` (Laravel/PHP)
+- `mysql`
+- `phpmyadmin`
 
-```bash
-docker compose exec -T laravel.test composer install
-docker compose exec -T laravel.test npm install
-```
-
-3. Setup aplikasi:
+1. Clone dan masuk ke folder project.
 
 ```bash
-docker compose exec -T laravel.test php artisan key:generate
-docker compose exec -T laravel.test php artisan migrate --seed
+git clone <URL_REPOSITORY_GITHUB> mki
+cd mki
 ```
 
-4. Jalankan Vite dev server (opsional untuk development frontend):
+2. Buat `.env`, lalu pastikan konfigurasi DB untuk container MySQL.
 
 ```bash
-docker compose exec -T laravel.test npm run dev
+cp .env.example .env
 ```
 
-## Cara Login dan Akun
+Contoh nilai penting di `.env`:
 
-### URL Login
+```env
+APP_PORT=8000
+APP_URL=http://localhost:8000
+DB_CONNECTION=mysql
+DB_HOST=mysql
+DB_PORT=3306
+DB_DATABASE=laravel
+DB_USERNAME=laravel
+DB_PASSWORD=secret
+MYSQL_ROOT_PASSWORD=root
+FORWARD_DB_PORT=3307
+PHPMYADMIN_PORT=8080
+```
 
-- Halaman login: `/login`
-- Akses root `/` otomatis diarahkan ke `/login` jika belum login.
-
-### Akun Default Seeder
-
-Jika Anda menjalankan `php artisan migrate --seed`, akun default yang dibuat adalah:
-
-| Nama      | Email            | Password | Role        | Status |
-|-----------|------------------|----------|-------------|--------|
-| Test User | test@example.com | password | Brand Owner | Aktif  |
-
-### Catatan Penting Login
-
-- Registrasi publik dinonaktifkan (route register di-comment).
-- Jika akun default belum ada, jalankan kembali:
+3. Jalankan container.
 
 ```bash
-php artisan db:seed
+docker compose up -d --build
 ```
 
-- Jika database perlu di-reset total:
+4. Install dependency PHP dan setup Laravel di container.
 
 ```bash
-php artisan migrate:fresh --seed
+docker compose exec -T app composer install
+docker compose exec -T app php artisan key:generate
+docker compose exec -T app php artisan migrate
+docker compose exec -T app php artisan storage:link
 ```
 
-## Kegunaan Website Ini
-
-Website ini berfungsi sebagai panel admin untuk sistem manajemen brand dan tag verifikasi produk.
-
-Manfaat utamanya:
-
-- Sentralisasi data master `Brand`, `Kategori Produk`, dan `SKU Produk`.
-- Pembuatan `Tag/QR` secara massal per batch untuk kebutuhan verifikasi produk.
-- Monitoring aktivitas scan dari end-user untuk deteksi indikasi pemalsuan.
-- Pengelolaan akun internal dan role akses (`Super Admin` dan `Brand Owner`).
-- Pengaturan parameter sistem terkait keamanan dan perilaku scan.
-
-## Flow Penggunaan Website
-
-Flow operasional yang direkomendasikan:
-
-1. Login melalui `/login`.
-2. Buka tab `Dashboard` untuk melihat ringkasan data master dan statistik scan.
-3. Kelola `Brand` (buat/ubah/nonaktifkan) dan tetapkan pemilik brand (Brand Owner).
-4. Susun `Kategori Produk` (level 1, 2, 3) agar struktur katalog konsisten.
-5. Input/kelola `SKU Produk` sesuai brand dan kategori yang sudah tersedia.
-6. Generate batch `Tag/QR` pada menu `Generate Tag/QR`, lalu unduh hasil tag bila diperlukan.
-7. Pantau `Aktivitas Scan` untuk melihat status validasi seperti `Original`, `Peringatan`, `Invalid`, atau indikasi lain.
-8. Kelola `Users & Roles` untuk menambah user, ubah role, reset password, serta kontrol status akun.
-9. Atur konfigurasi global pada menu `Pengaturan` sesuai kebijakan operasional.
-
-Flow implementasi awal (first setup) yang umum:
-
-1. Jalankan migrasi + seed.
-2. Login dengan akun default.
-3. Buat/aktifkan akun `Super Admin` jika diperlukan untuk kontrol penuh.
-4. Tambahkan user `Brand Owner`.
-5. Lengkapi master data, lalu mulai generate tag.
-
-## Ringkasan Arsitektur
-
-Saat ini arsitektur halaman admin dibagi menjadi 5 lapisan utama:
-
-1. `AdminPanel.jsx` sebagai _container/controller_ utama.
-2. `Views/` untuk setiap tab konten.
-3. `Sidebar/` untuk definisi item menu sidebar.
-4. `components/` untuk komponen reusable lintas view.
-5. `config/` untuk data konstan dan skema.
-
-## Entry Point Halaman Admin
-
-- Backend route: `/dashboard`
-- Controller: `BrandController@index`
-- Inertia render: `Inertia::render('AdminPanel', ...)`
-- Frontend page: `resources/js/Pages/AdminPanel.jsx`
-
-## Struktur Folder (Aktual)
-
-```text
-resources/js/Pages/
-  AdminPanel.jsx
-  AdminPanel/
-    Sidebar/
-      index.js
-      Dashboard.js
-      Brand.js
-      ProductCategories.js
-      ProductSku.js
-      GenerateTag.js
-      ScanActivity.js
-      UsersRoles.js
-      Settings.js
-
-    Views/
-      createAdminPanelViews.jsx
-      Dashboard.jsx
-      BrandManager.jsx
-      CategoryManager.jsx
-      ProductManager.jsx
-      ProductForm.jsx
-      TagGenerator.jsx
-      UserManager.jsx
-      ScanHistory.jsx
-      Settings.jsx
-
-    components/
-      StatCard.jsx
-      PageAlert.jsx
-      ToggleSwitch.jsx
-      Tooltip.jsx
-      LeafletMap.jsx
-      SortIcon.jsx
-
-    config/
-      productCatalog.js
-```
-
-## Peran Tiap Bagian
-
-### 1) `AdminPanel.jsx`
-
-File ini bertanggung jawab untuk:
-
-- Menyimpan state global (active tab, modal, data, sorting, filter, toast, confirm).
-- Menyimpan business logic dan handler API (create/update/delete, transform data, helper).
-- Menyusun layout utama (sidebar, header, content area, modal global).
-- Mengirim context ke seluruh view melalui `createAdminPanelViews`.
-
-Catatan: File ini memang masih cukup panjang karena menampung logika aplikasi inti.
-
-### 2) `Views/`
-
-Setiap file di `Views/` mewakili 1 tab layar.
-
-- `Dashboard.jsx`
-- `BrandManager.jsx`
-- `CategoryManager.jsx`
-- `ProductManager.jsx`
-- `ProductForm.jsx`
-- `TagGenerator.jsx`
-- `UserManager.jsx`
-- `ScanHistory.jsx`
-- `Settings.jsx`
-
-`createAdminPanelViews.jsx` adalah aggregator/factory yang mengembalikan fungsi render per tab.
-
-### 3) `Sidebar/`
-
-Folder ini hanya berisi konfigurasi menu sidebar (id, label, icon, isSub).
-
-`Sidebar/index.js` menggabungkan item menjadi 3 kelompok:
-
-- `DASHBOARD_ITEM`
-- `MASTER_DATA_ITEMS`
-- `SYSTEM_ITEMS`
-
-### 4) `components/`
-
-Komponen reusable yang dipakai lintas view:
-
-- `StatCard`
-- `PageAlert`
-- `ToggleSwitch`
-- `Tooltip`
-- `LeafletMap`
-- `SortIcon`
-
-### 5) `config/`
-
-`productCatalog.js` berisi:
-
-- `INITIAL_CATEGORY_DATA`
-- `PRODUCT_SPEC_SCHEMA`
-
-## Alur Render UI
-
-1. Backend mengirim props awal ke Inertia (`databaseBrands`, `databaseCategories`, `databaseUsers`, `databaseTagBatches`).
-2. `AdminPanel.jsx` menerima props, normalisasi data, dan menyimpan state.
-3. `AdminPanel.jsx` memanggil `createAdminPanelViews(context)`.
-4. Berdasarkan `activeTab`, tab yang sesuai dirender:
-
-- `dashboard` -> `Dashboard()`
-- `brand` -> `BrandManager()`
-- `categories` -> `CategoryManager()`
-- `product` -> `ProductManager()`
-- `product_form` -> `ProductForm()`
-- `tags` -> `TagGenerator()`
-- `users` -> `UserManager()`
-- `scan_history` -> `ScanHistory()`
-- `settings` -> `Settings()`
-
-## Konvensi Penamaan (Saat Ini)
-
-- Nama folder sidebar: `Sidebar` (tidak memakai kata `MenuItems`).
-- Nama file sidebar: tanpa suffix `MenuItem`.
-- Nama file di `Views`: tanpa suffix `View`.
-- Factory view: `createAdminPanelViews`.
-
-## Panduan Maintenance
-
-### Menambah menu sidebar baru
-
-1. Tambah file baru di `resources/js/Pages/AdminPanel/Sidebar/`.
-2. Export object item menu (id, label, icon, isSub).
-3. Daftarkan di `Sidebar/index.js` ke grup yang sesuai.
-4. Tambahkan handler render di `AdminPanel.jsx` bila butuh tab baru.
-
-### Menambah tab view baru
-
-1. Buat file baru di `Views/`, contoh: `Report.jsx`.
-2. Export creator function, contoh: `createReport(context)`.
-3. Daftarkan di `Views/createAdminPanelViews.jsx`.
-4. Tambah kondisi render `activeTab` di `AdminPanel.jsx`.
-5. Tambah item sidebar (jika tab harus bisa diklik dari menu).
-
-### Menambah komponen reusable
-
-1. Buat file di `components/`.
-2. Import di `AdminPanel.jsx`.
-3. Teruskan via `context` ke view yang membutuhkan.
-
-## Build dan Validasi
-
-Jalankan build untuk memastikan semua rename/import aman:
+5. Install/build asset frontend dari host (karena image `app` tidak membawa Node.js).
 
 ```bash
+npm install
+npm run dev
+# atau untuk production:
+# npm run build
+```
+
+URL default:
+
+- App: `http://localhost:8000`
+- phpMyAdmin: `http://localhost:8080`
+- MySQL host port: `3307`
+
+## Akun Awal dan Login
+
+Catatan penting:
+
+- Route register publik dinonaktifkan
+- `DatabaseSeeder` default kosong (tidak membuat akun dummy)
+- Dashboard `/adminmki` memakai middleware `auth` + `verified`
+
+Jika belum ada user admin, buat manual via tinker:
+
+```bash
+php artisan tinker --execute="\App\Models\User::query()->forceCreate(['name'=>'Super Admin','email'=>'admin@example.com','email_verified_at'=>now(),'password'=>'Admin12345!','role'=>'Super Admin','status'=>1]);"
+```
+
+Setelah itu login ke `/login`.
+
+## Workflow GitHub untuk Maintenance
+
+### Clone pertama kali
+
+```bash
+git clone <URL_REPOSITORY_GITHUB> mki
+cd mki
+```
+
+### Update branch lokal dari `main`
+
+```bash
+git checkout main
+git pull origin main
+```
+
+### Buat branch kerja
+
+```bash
+git checkout -b chore/<nama-perubahan>
+```
+
+### Commit dan push
+
+```bash
+git add .
+git commit -m "chore: <deskripsi perubahan>"
+git push -u origin chore/<nama-perubahan>
+```
+
+### Setelah itu
+
+- Buat Pull Request ke `main`
+- Minta review
+- Merge setelah lulus review dan verifikasi
+
+## SOP Maintenance Rutin
+
+### 1) Cek kondisi service
+
+Tanpa Docker:
+
+```bash
+php artisan about
+```
+
+Dengan Docker:
+
+```bash
+docker compose ps
+```
+
+### 2) Cek log aplikasi
+
+```bash
+tail -f storage/logs/laravel.log
+# PowerShell:
+# Get-Content storage\logs\laravel.log -Wait
+```
+
+### 3) Backup database
+
+MySQL lokal:
+
+```bash
+mysqldump -u root -p laravel > backup_YYYYMMDD.sql
+```
+
+MySQL Docker:
+
+```bash
+docker compose exec -T mysql sh -lc "mysqldump -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" > backup_YYYYMMDD.sql
+```
+
+### 4) Restore database (jika perlu)
+
+MySQL lokal:
+
+```bash
+mysql -u root -p laravel < backup_YYYYMMDD.sql
+```
+
+MySQL Docker:
+
+```bash
+docker compose exec -i mysql sh -lc "mysql -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" < backup_YYYYMMDD.sql
+```
+
+### 5) Deploy/update aman (ringkas)
+
+```bash
+php artisan down
+git pull origin main
+composer install --no-dev --optimize-autoloader
+npm ci
+npm run build
+php artisan migrate --force
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan up
+```
+
+Untuk setup Docker, jalankan command `php artisan ...` via:
+
+```bash
+docker compose exec -T app <COMMAND>
+```
+
+## Command Cepat yang Sering Dipakai
+
+```bash
+# Jalankan dev all-in-one
+composer run dev
+
+# Jalankan test
+composer run test
+
+# Bersihkan cache
+php artisan optimize:clear
+
+# Rebuild frontend
 npm run build
 ```
 
-Bila memakai container Docker project:
+## Troubleshooting Umum
 
-```bash
-docker compose exec -T laravel.test npm run build
+1. Error `Vite manifest not found`
+
+- Solusi: jalankan `npm run build`
+
+2. Error `No application encryption key has been specified`
+
+- Solusi: jalankan `php artisan key:generate`
+
+3. Login berhasil tapi tidak bisa masuk `/adminmki`
+
+- Cek `email_verified_at` user tidak `NULL`
+- Cek `status` user aktif (`1`)
+
+4. Error tabel tidak ditemukan (`SQLSTATE...`)
+
+- Solusi: jalankan `php artisan migrate`
+
+5. Perubahan code tidak tampil
+
+- Jalankan `php artisan optimize:clear`
+- Hard refresh browser
+
+## Struktur Folder Inti
+
+```text
+app/
+database/
+resources/js/
+resources/views/
+routes/
 ```
 
-## Catatan Penting
+## Catatan Tambahan
 
-- Setelah rename file/folder, selalu update seluruh import terkait.
-- Jangan edit file hasil build di `public/build/`.
-- Jika menambah state/handler baru, prioritaskan menaruh UI di `Views/` dan logika di `AdminPanel.jsx`.
-- Untuk langkah refactor lanjutan, disarankan memecah logic besar di `AdminPanel.jsx` menjadi custom hooks (`useBrand`, `useUser`, `useTagBatch`, dll).
+- Jangan edit file hasil build di `public/build`
+- Lakukan backup DB sebelum migrasi di environment produksi
+- Simpan kredensial `.env` di secret manager, jangan commit ke GitHub
 
-## Status Refactor Saat Ini
-
-- Pemecahan sidebar: selesai.
-- Pemecahan view per tab: selesai.
-- Rename `Dashboard` ke `AdminPanel`: selesai.
-- Konsistensi penamaan file/folder (`Sidebar`, tanpa suffix `View`/`MenuItem`): selesai.
-- Build verifikasi pasca-rename: selesai.
