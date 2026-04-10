@@ -21,7 +21,7 @@ import {
     SYSTEM_ITEMS
 } from './AdminPanel/Sidebar';
 import createAdminPanelViews from './AdminPanel/Views/createAdminPanelViews';
-import { PRODUCT_SPEC_SCHEMA } from './AdminPanel/config/productCatalog';
+import { PRODUCT_SPEC_SCHEMA, resolveProductSpecSchema } from './AdminPanel/config/productCatalog';
 import StatCard from './AdminPanel/components/StatCard';
 import PageAlert from './AdminPanel/components/PageAlert';
 import ToggleSwitch from './AdminPanel/components/ToggleSwitch';
@@ -1145,6 +1145,32 @@ export default function AdminPanel({
         }
         if (catL3 && !catL2) {
             showToast("Struktur kategori tidak valid. Pilih Sub Kategori sebelum memilih Varian Akhir.", "error");
+            return;
+        }
+
+        const selectedCategoryLevel1 = categories.find((cat) => String(cat.id) === String(catL1));
+        const selectedCategoryLevel2 = selectedCategoryLevel1?.subCategories?.find((cat) => String(cat.id) === String(catL2));
+        const selectedCategoryLevel3 = selectedCategoryLevel2?.subSubCategories?.find((cat) => String(cat.id) === String(catL3));
+        const activeSpecSchema = resolveProductSpecSchema(PRODUCT_SPEC_SCHEMA, {
+            catL2Id: catL2 || '',
+            catL3Id: catL3 || '',
+            categoryLevel2Name: selectedCategoryLevel2?.name || '',
+            categoryLevel3Name: selectedCategoryLevel3?.name || '-',
+        });
+        const requiredSpecFields = [
+            ...(activeSpecSchema?.primaryFields || activeSpecSchema?.fields || []),
+            ...(activeSpecSchema?.extendedFields || []),
+        ].filter((field) => Boolean(field?.required));
+        const missingRequiredSpecLabels = requiredSpecFields
+            .filter((field) => String(productInput.dynamicFields?.[field.name] ?? '').trim() === '')
+            .map((field) => field.label)
+            .filter(Boolean);
+
+        if (missingRequiredSpecLabels.length > 0) {
+            showToast(`Mohon lengkapi spesifikasi wajib: ${missingRequiredSpecLabels.join(', ')}.`, "error");
+            setActiveFormSection('spec');
+            const specSection = typeof document !== 'undefined' ? document.getElementById('form-spec') : null;
+            specSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
         }
 
