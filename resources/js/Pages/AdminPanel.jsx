@@ -36,6 +36,7 @@ export default function AdminPanel({
     databaseTagBatches,
     databaseProducts,
     databaseScanLogs,
+    databaseScanActivitiesCount,
     securitySettings,
 }) {
     const authUser = usePage().props?.auth?.user || null;
@@ -577,6 +578,7 @@ export default function AdminPanel({
 
     const [products, setProducts] = useState((databaseProducts || []).map(normalizeProductRecord));
     const [scanLogs, setScanLogs] = useState((databaseScanLogs || []).map(normalizeScanLogRecord));
+    const [scanActivitiesCount, setScanActivitiesCount] = useState(Number(databaseScanActivitiesCount || 0));
     const [isRefreshingScanLogs, setIsRefreshingScanLogs] = useState(false);
     const [selectedScanLogDetail, setSelectedScanLogDetail] = useState(null);
 
@@ -735,6 +737,10 @@ export default function AdminPanel({
             areScanLogCollectionsEqual(currentLogs, incomingLogs) ? currentLogs : incomingLogs
         ));
     }, [databaseScanLogs]);
+    useEffect(() => {
+        const nextCount = Number(databaseScanActivitiesCount);
+        setScanActivitiesCount(Number.isFinite(nextCount) && nextCount >= 0 ? nextCount : 0);
+    }, [databaseScanActivitiesCount]);
 
     useEffect(() => {
         setScanValidLimit(normalizeScanLimitSetting(securitySettings?.maxValidScanLimit, 5));
@@ -764,7 +770,7 @@ export default function AdminPanel({
     }, [activeTab]);
 
     useEffect(() => {
-        if (activeTab !== 'scan_history') {
+        if (activeTab !== 'scan_history' && activeTab !== 'dashboard') {
             return;
         }
         if (selectedScanLogDetail) {
@@ -781,6 +787,8 @@ export default function AdminPanel({
                     setScanLogs((currentLogs) => (
                         areScanLogCollectionsEqual(currentLogs, normalizedLogs) ? currentLogs : normalizedLogs
                     ));
+                    const totalFromApi = Number(response?.data?.total);
+                    setScanActivitiesCount(Number.isFinite(totalFromApi) && totalFromApi >= 0 ? totalFromApi : normalizedLogs.length);
                 })
                 .catch(() => {
                     // Silent by design: keep existing logs if refresh fails.
@@ -2048,6 +2056,7 @@ export default function AdminPanel({
         isSavingSecuritySettings,
         handleSaveSecuritySettings,
         scanLogs,
+        scanActivitiesCount,
         selectedScanLogDetail,
         statusFilter,
         setStatusFilter,

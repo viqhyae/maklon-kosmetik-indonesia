@@ -29,6 +29,7 @@ class BrandController extends Controller {
         $databaseCategories = [];
         $databaseProducts = [];
         $databaseScanLogs = [];
+        $databaseScanActivitiesCount = 0;
         $databaseUsers = [];
         $databaseTagBatches = [];
         $securitySettings = [
@@ -155,6 +156,7 @@ class BrandController extends Controller {
                 }
             }
 
+            $databaseScanActivitiesCount = (clone $scanQuery)->count();
             $databaseScanLogs = $scanQuery
                 ->latest('id')
                 ->limit(500)
@@ -191,6 +193,7 @@ class BrandController extends Controller {
             'databaseCategories' => $databaseCategories,
             'databaseProducts' => $databaseProducts,
             'databaseScanLogs' => $databaseScanLogs,
+            'databaseScanActivitiesCount' => $databaseScanActivitiesCount,
             'databaseUsers' => $databaseUsers,
             'databaseTagBatches' => $databaseTagBatches,
             'securitySettings' => $securitySettings,

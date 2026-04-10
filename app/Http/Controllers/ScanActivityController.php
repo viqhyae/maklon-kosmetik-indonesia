@@ -21,6 +21,7 @@ class ScanActivityController extends Controller
             }
         }
 
+        $total = (clone $query)->count();
         $logs = $query
             ->latest('id')
             ->limit(500)
@@ -30,6 +31,7 @@ class ScanActivityController extends Controller
 
         return response()->json([
             'logs' => $logs,
+            'total' => $total,
         ]);
     }
 
