@@ -15,10 +15,14 @@ import {
     UploadCloud,
     X,
 } from 'lucide-react';
+import { resolveProductSpecSchema } from '../config/productCatalog';
 
 const SearchableSingleSelect = ({
     actionText,
+    creatable = false,
+    createInputPlaceholder = 'Ketik nilai baru di sini...',
     disabled = false,
+    noResultsText = 'Data tidak ditemukan.',
     onActionClick,
     onChange,
     options = [],
@@ -29,12 +33,27 @@ const SearchableSingleSelect = ({
 }) => {
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchKeyword, setSearchKeyword] = React.useState('');
+    const [isCreateMode, setIsCreateMode] = React.useState(false);
+    const [newOption, setNewOption] = React.useState('');
     const rootRef = React.useRef(null);
 
     const selectedOption = options.find((option) => String(option.value) === String(value)) || null;
+    const selectedLabel = selectedOption?.label || (String(value || '').trim() !== '' ? String(value) : placeholder);
     const filteredOptions = options.filter((option) =>
         option.label.toLowerCase().includes(searchKeyword.toLowerCase())
     );
+    const normalizedNewOption = newOption.trim();
+    const hasExactNewOptionMatch = options.some((option) => (
+        option.label.toLowerCase() === normalizedNewOption.toLowerCase()
+        || String(option.value).toLowerCase() === normalizedNewOption.toLowerCase()
+    ));
+    const canCreateOption = creatable && normalizedNewOption !== '' && !hasExactNewOptionMatch;
+    const hasFooterActions = creatable || (actionText && onActionClick);
+
+    const resetCreateState = () => {
+        setIsCreateMode(false);
+        setNewOption('');
+    };
 
     React.useEffect(() => {
         if (!isOpen) return undefined;
@@ -43,6 +62,7 @@ const SearchableSingleSelect = ({
             if (!rootRef.current?.contains(event.target)) {
                 setIsOpen(false);
                 setSearchKeyword('');
+                resetCreateState();
             }
         };
 
@@ -54,12 +74,26 @@ const SearchableSingleSelect = ({
         onChange(nextValue);
         setIsOpen(false);
         setSearchKeyword('');
+        resetCreateState();
     };
 
     const handleToggle = () => {
         if (disabled) return;
-        setIsOpen((prev) => !prev);
-        if (isOpen) setSearchKeyword('');
+        setIsOpen((prev) => {
+            const nextState = !prev;
+            if (!nextState) {
+                setSearchKeyword('');
+                resetCreateState();
+            }
+            return nextState;
+        });
+    };
+
+    const handleAddNewConfirm = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!canCreateOption) return;
+        handleSelect(normalizedNewOption);
     };
 
     return (
@@ -68,10 +102,11 @@ const SearchableSingleSelect = ({
                 type="button"
                 onClick={handleToggle}
                 disabled={disabled}
+                data-required={required ? 'true' : 'false'}
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 min-h-[52px] focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm bg-slate-50/50 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-3"
             >
-                <span className={selectedOption ? 'text-[#B58653] font-semibold' : 'text-slate-400'}>
-                    {selectedOption ? selectedOption.label : placeholder}
+                <span className={String(value || '').trim() !== '' ? 'text-[#B58653] font-semibold' : 'text-slate-400'}>
+                    {selectedLabel}
                 </span>
                 <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -79,7 +114,7 @@ const SearchableSingleSelect = ({
             {isOpen && (
                 <div className="absolute top-full mt-3 left-0 right-0 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
                     <div className="p-3 border-b border-slate-100">
-                        <div className="flex items-center gap-2 border border-[#C1986E] rounded-xl px-3 py-2.5">
+                        <div className="flex items-center gap-2 border border-slate-200 focus-within:border-[#C1986E] focus-within:ring-2 focus-within:ring-[#C1986E]/20 rounded-xl px-3 py-2.5 transition-all bg-white">
                             <Search size={16} className="text-slate-400 flex-shrink-0" />
                             <input
                                 type="text"
@@ -89,16 +124,17 @@ const SearchableSingleSelect = ({
                                     if (event.key === 'Escape') {
                                         setIsOpen(false);
                                         setSearchKeyword('');
+                                        resetCreateState();
                                     }
                                 }}
                                 placeholder={searchPlaceholder}
                                 autoFocus
-                                className="w-full bg-transparent border-none outline-none text-sm focus:ring-0 p-0"
+                                className="w-full bg-transparent border-none outline-none text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0 p-0"
                             />
                         </div>
                     </div>
 
-                    <div className="max-h-56 overflow-y-auto p-2 custom-scrollbar">
+                    <div className={`overflow-y-auto p-2 custom-scrollbar ${hasFooterActions ? 'max-h-48' : 'max-h-56'}`}>
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => {
                                 const isSelected = String(option.value) === String(value);
@@ -115,16 +151,83 @@ const SearchableSingleSelect = ({
                                 );
                             })
                         ) : (
-                            <div className="px-3 py-4 text-sm text-slate-400 text-center">Brand tidak ditemukan.</div>
+                            <div className="px-3 py-4 text-sm text-slate-400 text-center">{noResultsText}</div>
                         )}
                     </div>
 
+                    {creatable && (
+                        <div className="border-t border-slate-100 p-3 bg-slate-50/60 space-y-2">
+                            {!isCreateMode && (
+                                <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setIsCreateMode(true);
+                                        setNewOption('');
+                                    }}
+                                    className="w-full px-4 py-2.5 text-[#C1986E] hover:bg-[#C1986E]/5 transition-colors text-sm font-semibold rounded-xl flex items-center justify-center gap-2"
+                                >
+                                    <Plus size={16} />
+                                    tambah nilai atribut
+                                </button>
+                            )}
+
+                            {isCreateMode && (
+                                <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            placeholder={createInputPlaceholder}
+                                            className="flex-1 text-sm border border-[#C1986E]/50 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#C1986E] bg-white shadow-inner"
+                                            value={newOption}
+                                            onChange={(event) => setNewOption(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    handleAddNewConfirm(event);
+                                                }
+                                            }}
+                                            onClick={(event) => event.stopPropagation()}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddNewConfirm}
+                                            disabled={!canCreateOption}
+                                            aria-label="Simpan nilai atribut"
+                                            title="Simpan nilai atribut"
+                                            className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-[#C1986E] text-white hover:bg-[#A37E58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <Check size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                resetCreateState();
+                                            }}
+                                            aria-label="Batal tambah nilai atribut"
+                                            title="Batal tambah nilai atribut"
+                                            className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                    {normalizedNewOption !== '' && hasExactNewOptionMatch && (
+                                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                                            Nilai atribut sudah tersedia, pilih dari daftar.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {actionText && onActionClick && (
                         <button
                             type="button"
                             onClick={() => {
                                 setIsOpen(false);
                                 setSearchKeyword('');
+                                resetCreateState();
                                 onActionClick();
                             }}
                             className="w-full border-t border-slate-100 px-4 py-3 text-[#C1986E] hover:bg-[#C1986E]/5 transition-colors text-sm font-semibold flex items-center justify-center gap-2"
@@ -171,7 +274,11 @@ const ProductForm = () => {
     } = context;
     // --- SAFEGUARD --- Memastikan dynamicFields selalu berupa objek
     const currentDynamicFields = productInput.dynamicFields || {};
+    const [isSpecExpanded, setIsSpecExpanded] = React.useState(false);
+    const [extendedSpecMaxHeight, setExtendedSpecMaxHeight] = React.useState(0);
+    const extendedSpecFieldsRef = React.useRef(null);
     const hasSelectedCategory = Boolean(productInput.catL1);
+    const specInputClassName = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm text-slate-700 bg-slate-50/50 hover:bg-white placeholder:text-slate-400';
     const activeBrandOptions = brands
         .filter((brand) => isBrandActive(brand.status))
         .map((brand) => ({
@@ -202,6 +309,174 @@ const ProductForm = () => {
                 [fieldName]: value,
             },
         });
+    };
+    const selectedCategoryNodes = React.useMemo(() => {
+        const level1 = categories.find((item) => String(item.id) === String(productInput.catL1));
+        const level2 = level1?.subCategories?.find((item) => String(item.id) === String(productInput.catL2));
+        const level3 = level2?.subSubCategories?.find((item) => String(item.id) === String(productInput.catL3));
+        return { level1, level2, level3 };
+    }, [categories, productInput.catL1, productInput.catL2, productInput.catL3]);
+    const activeSpecSchema = React.useMemo(() => resolveProductSpecSchema(PRODUCT_SPEC_SCHEMA, {
+        catL2Id: productInput.catL2,
+        catL3Id: productInput.catL3,
+        categoryLevel2Name: selectedCategoryNodes.level2?.name || '',
+        categoryLevel3Name: selectedCategoryNodes.level3?.name || '-',
+    }), [PRODUCT_SPEC_SCHEMA, productInput.catL2, productInput.catL3, selectedCategoryNodes]);
+    const getFullWidthIndexes = React.useCallback((fields = []) => {
+        const fullWidthIndexes = new Set();
+        let pendingSingleIndex = null;
+        let rowUsage = 0;
+
+        fields.forEach((field, index) => {
+            const span = Number(field.colSpan) === 2 ? 2 : 1;
+            if (span === 2) {
+                if (rowUsage === 1 && pendingSingleIndex !== null) {
+                    fullWidthIndexes.add(pendingSingleIndex);
+                }
+                rowUsage = 0;
+                pendingSingleIndex = null;
+                return;
+            }
+
+            if (rowUsage === 0) {
+                rowUsage = 1;
+                pendingSingleIndex = index;
+            } else {
+                rowUsage = 0;
+                pendingSingleIndex = null;
+            }
+        });
+
+        if (rowUsage === 1 && pendingSingleIndex !== null) {
+            fullWidthIndexes.add(pendingSingleIndex);
+        }
+
+        return fullWidthIndexes;
+    }, []);
+    const openNativeDatePicker = (event) => {
+        if (typeof event?.target?.showPicker !== 'function') return;
+        try {
+            event.target.showPicker();
+        } catch (_) {
+            // ignore: some browsers block showPicker outside strict user gesture contexts
+        }
+    };
+    React.useEffect(() => {
+        setIsSpecExpanded(false);
+        setExtendedSpecMaxHeight(0);
+    }, [productInput.catL2, productInput.catL3]);
+    React.useEffect(() => {
+        if (!isSpecExpanded || !extendedSpecFieldsRef.current) {
+            setExtendedSpecMaxHeight(0);
+            return;
+        }
+
+        setExtendedSpecMaxHeight(extendedSpecFieldsRef.current.scrollHeight);
+    }, [isSpecExpanded, productInput.catL2]);
+    React.useEffect(() => {
+        if (typeof ResizeObserver === 'undefined' || !extendedSpecFieldsRef.current) {
+            return undefined;
+        }
+
+        const observer = new ResizeObserver(() => {
+            if (isSpecExpanded && extendedSpecFieldsRef.current) {
+                setExtendedSpecMaxHeight(extendedSpecFieldsRef.current.scrollHeight);
+            }
+        });
+
+        observer.observe(extendedSpecFieldsRef.current);
+        return () => observer.disconnect();
+    }, [isSpecExpanded, productInput.catL2]);
+    const renderSpecField = (field, forceFullWidth = false) => {
+        const fieldValue = currentDynamicFields[field.name] || '';
+        const isRequired = Boolean(field.required);
+        const fieldOptions = normalizeSelectOptions(field.options || []);
+        const shouldSpanFull = Number(field.colSpan) === 2 || forceFullWidth;
+
+        return (
+            <div key={field.name} className={`space-y-1.5 ${shouldSpanFull ? 'md:col-span-2' : ''}`}>
+                <label className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    {field.label} {isRequired && <span className="text-red-500">*</span>}
+                </label>
+
+                {field.type === 'searchable' ? (
+                    <SearchableSingleSelect
+                        options={fieldOptions}
+                        value={fieldValue}
+                        onChange={(nextValue) => updateDynamicField(field.name, nextValue)}
+                        placeholder={field.placeholder || '-- Pilih Opsi --'}
+                        searchPlaceholder={field.searchPlaceholder || 'Cari opsi...'}
+                        disabled={isSavingProduct}
+                        noResultsText="Opsi tidak ditemukan."
+                    />
+                ) : field.type === 'searchable-creatable' ? (
+                    <SearchableSingleSelect
+                        options={fieldOptions}
+                        value={fieldValue}
+                        onChange={(nextValue) => updateDynamicField(field.name, nextValue)}
+                        placeholder={field.placeholder || '-- Pilih atau ketik nilai --'}
+                        searchPlaceholder={field.searchPlaceholder || 'Cari atau tambah nilai...'}
+                        createInputPlaceholder={field.createInputPlaceholder || 'Ketik nilai baru di sini...'}
+                        disabled={isSavingProduct}
+                        creatable
+                        noResultsText="Belum ada opsi. Ketik lalu pilih tambah nilai."
+                    />
+                ) : field.type === 'select' ? (
+                    <select
+                        className={`${specInputClassName} cursor-pointer ${fieldValue ? 'text-slate-700' : 'text-slate-400'}`}
+                        value={fieldValue}
+                        onChange={(event) => updateDynamicField(field.name, event.target.value)}
+                        required={isRequired}
+                    >
+                        <option value="">-- Pilih Opsi --</option>
+                        {fieldOptions.map((option) => (
+                            <option key={`${field.name}-${option.value}`} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                ) : field.type === 'multi-create' ? (
+                    <>
+                        <input
+                            type="text"
+                            list={`spec-option-list-${field.name}`}
+                            placeholder={field.placeholder || 'Pisahkan beberapa nilai dengan koma'}
+                            className={specInputClassName}
+                            value={fieldValue}
+                            onChange={(event) => updateDynamicField(field.name, event.target.value)}
+                            required={isRequired}
+                        />
+                        {fieldOptions.length > 0 && (
+                            <datalist id={`spec-option-list-${field.name}`}>
+                                {fieldOptions.map((option) => (
+                                    <option key={`${field.name}-suggestion-${option.value}`} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </datalist>
+                        )}
+                        <p className="text-[10px] text-slate-400">Pisahkan beberapa nilai dengan koma.</p>
+                    </>
+                ) : field.type === 'date' ? (
+                    <input
+                        type="date"
+                        className={`${specInputClassName} spec-date-input cursor-pointer ${fieldValue ? 'date-has-value text-slate-700' : 'text-slate-400'}`}
+                        value={fieldValue}
+                        onChange={(event) => updateDynamicField(field.name, event.target.value)}
+                        onClick={openNativeDatePicker}
+                        onFocus={openNativeDatePicker}
+                        required={isRequired}
+                    />
+                ) : (
+                    <input
+                        type="text"
+                        placeholder={field.placeholder}
+                        className={specInputClassName}
+                        value={fieldValue}
+                        onChange={(event) => updateDynamicField(field.name, event.target.value)}
+                        required={isRequired}
+                    />
+                )}
+            </div>
+        );
     };
 
         // --- HELPER SCROLL KE SEKSI FORM ---
@@ -401,6 +676,7 @@ const ProductForm = () => {
                                     searchPlaceholder="Cari brand..."
                                     required
                                     disabled={isSavingProduct}
+                                    noResultsText="Brand tidak ditemukan."
                                     actionText="belum ada brand / merk ? daftarkan disini"
                                     onActionClick={() => {
                                         openCreateBrandModal({ source: 'product_form' });
@@ -408,82 +684,53 @@ const ProductForm = () => {
                                 />
                             </div>
 
-                            {PRODUCT_SPEC_SCHEMA[productInput.catL2] ? (() => {
-                                const schema = PRODUCT_SPEC_SCHEMA[productInput.catL2];
+                            {activeSpecSchema ? (() => {
+                                const schema = activeSpecSchema;
                                 const IconCmp = schema.icon;
+                                const primaryFields = schema.primaryFields || schema.fields || [];
+                                const extendedFields = schema.extendedFields || [];
+                                const primaryFullWidthIndexes = getFullWidthIndexes(primaryFields);
+                                const extendedFullWidthIndexes = getFullWidthIndexes(extendedFields);
                                 return (
-                                    <div className={`rounded-xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-300 border ${schema.theme.bg}`}>
-                                        <h4 className={`font-bold flex items-center gap-2 text-sm border-b pb-3 ${schema.theme.title}`}>
+                                    <div className="rounded-xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-300 border border-slate-200 bg-slate-50">
+                                        <h4 className="font-bold flex items-center gap-2 text-sm border-b pb-3 text-slate-700 border-slate-200">
                                             <IconCmp size={16} /> {schema.title}
                                         </h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                            {schema.fields.map((field) => {
-                                                const fieldValue = currentDynamicFields[field.name] || '';
-                                                const isRequired = Boolean(field.required);
-                                                const fieldOptions = normalizeSelectOptions(field.options || []);
-
-                                                return (
-                                                    <div key={field.name} className={`space-y-1.5 ${field.colSpan === 2 ? 'md:col-span-2' : ''}`}>
-                                                        <label className={`text-xs font-bold uppercase tracking-wide ${schema.theme.label}`}>
-                                                            {field.label} {isRequired && <span className="text-red-500">*</span>}
-                                                        </label>
-
-                                                        {field.type === 'select' ? (
-                                                            <select
-                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white cursor-pointer ${schema.theme.input}`}
-                                                                value={fieldValue}
-                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
-                                                                required={isRequired}
-                                                            >
-                                                                <option value="">-- Pilih Opsi --</option>
-                                                                {fieldOptions.map((option) => (
-                                                                    <option key={`${field.name}-${option.value}`} value={option.value}>{option.label}</option>
-                                                                ))}
-                                                            </select>
-                                                        ) : field.type === 'multi-create' ? (
-                                                            <>
-                                                                <input
-                                                                    type="text"
-                                                                    list={`spec-option-list-${field.name}`}
-                                                                    placeholder={field.placeholder || 'Pisahkan beberapa nilai dengan koma'}
-                                                                    className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white ${schema.theme.input}`}
-                                                                    value={fieldValue}
-                                                                    onChange={(e) => updateDynamicField(field.name, e.target.value)}
-                                                                    required={isRequired}
-                                                                />
-                                                                {fieldOptions.length > 0 && (
-                                                                    <datalist id={`spec-option-list-${field.name}`}>
-                                                                        {fieldOptions.map((option) => (
-                                                                            <option key={`${field.name}-suggestion-${option.value}`} value={option.value}>
-                                                                                {option.label}
-                                                                            </option>
-                                                                        ))}
-                                                                    </datalist>
-                                                                )}
-                                                                <p className="text-[10px] text-slate-400">Pisahkan beberapa nilai dengan koma.</p>
-                                                            </>
-                                                        ) : field.type === 'date' ? (
-                                                            <input
-                                                                type="date"
-                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white cursor-pointer ${schema.theme.input}`}
-                                                                value={fieldValue}
-                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
-                                                                required={isRequired}
-                                                            />
-                                                        ) : (
-                                                            <input
-                                                                type="text"
-                                                                placeholder={field.placeholder}
-                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white ${schema.theme.input}`}
-                                                                value={fieldValue}
-                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
-                                                                required={isRequired}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                            {primaryFields.map((field, index) => renderSpecField(field, primaryFullWidthIndexes.has(index)))}
                                         </div>
+
+                                        {extendedFields.length > 0 && (
+                                            <div className="space-y-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsSpecExpanded((prev) => !prev)}
+                                                    className="inline-flex items-center gap-2 text-sm font-semibold text-[#B58653] hover:text-[#A37E58] transition-colors"
+                                                >
+                                                    <span>{isSpecExpanded ? 'Tampilkan lebih sedikit' : 'Tampilkan lebih banyak'}</span>
+                                                    <ChevronDown
+                                                        size={16}
+                                                        className={`transition-transform duration-300 ${isSpecExpanded ? 'rotate-180' : ''}`}
+                                                    />
+                                                </button>
+
+                                                <div
+                                                    className="overflow-hidden transition-[max-height,opacity,margin-top] duration-300 ease-in-out"
+                                                    style={{
+                                                        maxHeight: isSpecExpanded ? `${extendedSpecMaxHeight}px` : '0px',
+                                                        opacity: isSpecExpanded ? 1 : 0,
+                                                        marginTop: isSpecExpanded ? '0.5rem' : '0px',
+                                                    }}
+                                                    aria-hidden={!isSpecExpanded}
+                                                >
+                                                        <div ref={extendedSpecFieldsRef} className="pt-1">
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                                                {extendedFields.map((field, index) => renderSpecField(field, extendedFullWidthIndexes.has(index)))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })() : (

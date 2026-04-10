@@ -2,6 +2,7 @@ import React from 'react';
 import {
     AlertCircle,
     Building2,
+    ChevronDown,
     ChevronRight,
     Database,
     Edit,
@@ -20,6 +21,7 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
+import { resolveProductSpecSchema } from '../config/productCatalog';
 
 export default function createProductManager(context) {
     const {
@@ -43,16 +45,6 @@ export default function createProductManager(context) {
         Tooltip,
     } = context;
     const ProductManager = () => {
-        if (brands.length === 0) {
-            return (
-                <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4 animate-in fade-in duration-500">
-                    <AlertCircle size={48} className="text-yellow-600" />
-                    <h2 className="text-xl font-bold text-slate-800">Brand Belum Tersedia</h2>
-                    <button onClick={() => setActiveTab('brand')} className="bg-[#C1986E] hover:bg-[#A37E58] text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-sm active:scale-95 text-sm">Pergi ke Menu Brand</button>
-                </div>
-            );
-        }
-
         const filteredProducts = products.filter(p =>
             p.name.toLowerCase().includes(globalSearch.toLowerCase()) ||
             p.skuCode.toLowerCase().includes(globalSearch.toLowerCase()) ||
@@ -73,6 +65,74 @@ export default function createProductManager(context) {
         const detailImageSrc = selectedProductDetail
             ? buildProductImageUrl(selectedProductDetail?.image_url || selectedProductDetail?.image_public_url)
             : null;
+        const detailSpecSchema = (() => {
+            if (!selectedProductDetail) return null;
+            const categoryPathParts = String(selectedProductDetail.categoryPath || '')
+                .split('>')
+                .map((part) => part.trim())
+                .filter(Boolean);
+
+            return resolveProductSpecSchema(PRODUCT_SPEC_SCHEMA, {
+                catL2Id: selectedProductDetail.catL2,
+                catL3Id: selectedProductDetail.catL3,
+                categoryLevel2Name: categoryPathParts[1] || '',
+                categoryLevel3Name: categoryPathParts[2] || '-',
+            });
+        })();
+        const detailPrimarySpecFields = detailSpecSchema
+            ? [...(detailSpecSchema.primaryFields || detailSpecSchema.fields || [])]
+            : [];
+        const detailExtendedSpecFields = detailSpecSchema
+            ? [...(detailSpecSchema.extendedFields || [])]
+            : [];
+        const hasDetailSpecValues = Boolean(
+            selectedProductDetail?.dynamicFields
+            && Object.keys(selectedProductDetail.dynamicFields).length > 0
+            && detailSpecSchema
+            && (detailPrimarySpecFields.length + detailExtendedSpecFields.length > 0)
+        );
+        const [isDetailSpecExpanded, setIsDetailSpecExpanded] = React.useState(false);
+        const [detailSpecMaxHeight, setDetailSpecMaxHeight] = React.useState(0);
+        const detailExtendedFieldsRef = React.useRef(null);
+
+        React.useEffect(() => {
+            setIsDetailSpecExpanded(false);
+            setDetailSpecMaxHeight(0);
+        }, [selectedProductDetail?.id]);
+
+        React.useEffect(() => {
+            if (!isDetailSpecExpanded || !detailExtendedFieldsRef.current) {
+                setDetailSpecMaxHeight(0);
+                return;
+            }
+
+            setDetailSpecMaxHeight(detailExtendedFieldsRef.current.scrollHeight);
+        }, [isDetailSpecExpanded, selectedProductDetail?.id]);
+
+        React.useEffect(() => {
+            if (typeof ResizeObserver === 'undefined' || !detailExtendedFieldsRef.current) {
+                return undefined;
+            }
+
+            const observer = new ResizeObserver(() => {
+                if (isDetailSpecExpanded && detailExtendedFieldsRef.current) {
+                    setDetailSpecMaxHeight(detailExtendedFieldsRef.current.scrollHeight);
+                }
+            });
+
+            observer.observe(detailExtendedFieldsRef.current);
+            return () => observer.disconnect();
+        }, [isDetailSpecExpanded, selectedProductDetail?.id]);
+
+        if (brands.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4 animate-in fade-in duration-500">
+                    <AlertCircle size={48} className="text-yellow-600" />
+                    <h2 className="text-xl font-bold text-slate-800">Brand Belum Tersedia</h2>
+                    <button onClick={() => setActiveTab('brand')} className="bg-[#C1986E] hover:bg-[#A37E58] text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-sm active:scale-95 text-sm">Pergi ke Menu Brand</button>
+                </div>
+            );
+        }
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -265,18 +325,57 @@ export default function createProductManager(context) {
                                             </div>
 
                                             {/* Spesifikasi Dinamis */}
-                                            {selectedProductDetail.dynamicFields && Object.keys(selectedProductDetail.dynamicFields).length > 0 && PRODUCT_SPEC_SCHEMA[selectedProductDetail.catL2] && (
+                                            {hasDetailSpecValues && (
                                                 <div>
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
                                                         <Database size={14} className="text-slate-400" /> Spesifikasi Khusus
                                                     </p>
-                                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                        {PRODUCT_SPEC_SCHEMA[selectedProductDetail.catL2].fields.map(field => (
-                                                            <div key={field.name} className={field.colSpan === 2 ? "sm:col-span-2" : ""}>
-                                                                <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">{field.label}</p>
-                                                                <p className="text-sm font-semibold text-slate-700">{selectedProductDetail.dynamicFields[field.name] || '-'}</p>
+                                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner space-y-4">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                            {detailPrimarySpecFields.map((field) => (
+                                                                <div key={field.name} className={field.colSpan === 2 ? "sm:col-span-2" : ""}>
+                                                                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">{field.label}</p>
+                                                                    <p className="text-sm font-semibold text-slate-700">{selectedProductDetail.dynamicFields[field.name] || '-'}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        {detailExtendedSpecFields.length > 0 && (
+                                                            <div className="space-y-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setIsDetailSpecExpanded((prev) => !prev)}
+                                                                    className="inline-flex items-center gap-2 text-sm font-semibold text-[#B58653] hover:text-[#A37E58] transition-colors"
+                                                                >
+                                                                    <span>{isDetailSpecExpanded ? 'Tampilkan lebih sedikit' : 'Tampilkan lebih banyak'}</span>
+                                                                    <ChevronDown
+                                                                        size={16}
+                                                                        className={`transition-transform duration-300 ${isDetailSpecExpanded ? 'rotate-180' : ''}`}
+                                                                    />
+                                                                </button>
+
+                                                                <div
+                                                                    className="overflow-hidden transition-[max-height,opacity,margin-top] duration-300 ease-in-out"
+                                                                    style={{
+                                                                        maxHeight: isDetailSpecExpanded ? `${detailSpecMaxHeight}px` : '0px',
+                                                                        opacity: isDetailSpecExpanded ? 1 : 0,
+                                                                        marginTop: isDetailSpecExpanded ? '0.5rem' : '0px',
+                                                                    }}
+                                                                    aria-hidden={!isDetailSpecExpanded}
+                                                                >
+                                                                    <div ref={detailExtendedFieldsRef} className="pt-1">
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                            {detailExtendedSpecFields.map((field) => (
+                                                                                <div key={field.name} className={field.colSpan === 2 ? "sm:col-span-2" : ""}>
+                                                                                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">{field.label}</p>
+                                                                                    <p className="text-sm font-semibold text-slate-700">{selectedProductDetail.dynamicFields[field.name] || '-'}</p>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        ))}
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}

@@ -127,7 +127,7 @@ export default function createTagGenerator(context) {
                             isSameEntityId(batch.id, batchId) ? savedBatch : batch
                         )
                     );
-                    showToast(`Status batch ${batchId} berhasil diubah!`);
+                    showToast(`Status batch berhasil diubah!`);
                 })
                 .catch((error) => {
                     setBatches(previousBatchesSnapshot);

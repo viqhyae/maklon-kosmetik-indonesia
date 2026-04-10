@@ -1,3 +1,41 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Keep native date placeholder/edit color aligned with text inputs in both themes */
+input.spec-date-input {
+    color-scheme: light;
+}
+
+input.spec-date-input:not(.date-has-value) {
+    color: rgb(148 163 184);
+}
+
+input.spec-date-input:not(.date-has-value)::-webkit-datetime-edit {
+    color: rgb(148 163 184);
+}
+
+input.spec-date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+.dark input.spec-date-input,
+[data-theme='dark'] input.spec-date-input {
+    color-scheme: dark;
+}
+
+.dark input.spec-date-input:not(.date-has-value),
+[data-theme='dark'] input.spec-date-input:not(.date-has-value) {
+    color: rgb(100 116 139);
+}
+
+.dark input.spec-date-input:not(.date-has-value)::-webkit-datetime-edit,
+[data-theme='dark'] input.spec-date-input:not(.date-has-value)::-webkit-datetime-edit {
+    color: rgb(100 116 139);
+}
+
+.dark input.spec-date-input::-webkit-calendar-picker-indicator,
+[data-theme='dark'] input.spec-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.85) saturate(0.2);
+}

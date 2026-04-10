@@ -2072,7 +2072,7 @@ export default function AdminPanel({
         <div className={`h-screen w-full flex font-sans overflow-hidden ${isDarkMode ? 'admin-theme-dark bg-slate-950 text-slate-100' : 'bg-[#F8F9FA] text-slate-800'}`}>
             {/* Toast Notification */}
             {toast.isOpen && (
-                <div className={`fixed top-6 right-6 z-[200] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                <div className={`fixed top-6 right-6 z-[500] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
                     {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
                     {toast.message}
                 </div>
