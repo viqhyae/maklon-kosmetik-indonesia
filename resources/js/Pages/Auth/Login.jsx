@@ -21,7 +21,7 @@ export default function Login({ status }) {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#C1986E] to-[#e6bd95] p-4 sm:p-6 lg:p-10">
-            <Head title="Login" />
+            <Head title="Selamat Datang di Halaman Login" />
 
             <div className="w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl">
                 <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-2">

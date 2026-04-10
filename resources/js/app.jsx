@@ -6,9 +6,13 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const exactPageTitles = new Set([
+    'Selamat Datang di Halaman Login',
+    'Dashboard Admin MKI',
+]);
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (exactPageTitles.has(title) ? title : `${title} - ${appName}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,

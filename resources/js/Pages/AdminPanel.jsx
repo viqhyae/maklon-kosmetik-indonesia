@@ -13,7 +13,7 @@ import {
     UploadCloud,
     X,
 } from 'lucide-react';
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
     DASHBOARD_ITEM,
@@ -2105,6 +2105,7 @@ export default function AdminPanel({
 
     return (
         <div className={`h-screen w-full flex font-sans overflow-hidden ${isDarkMode ? 'admin-theme-dark bg-slate-950 text-slate-100' : 'bg-[#F8F9FA] text-slate-800'}`}>
+            <Head title="Dashboard Admin MKI" />
             {/* Toast Notification */}
             {toast.isOpen && (
                 <div className={`fixed top-6 right-6 z-[500] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
