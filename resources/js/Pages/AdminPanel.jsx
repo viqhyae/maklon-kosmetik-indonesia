@@ -770,7 +770,7 @@ export default function AdminPanel({
     }, [activeTab]);
 
     useEffect(() => {
-        if (activeTab !== 'scan_history' && activeTab !== 'dashboard') {
+        if (activeTab !== 'scan_history') {
             return;
         }
         if (selectedScanLogDetail) {

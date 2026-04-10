@@ -36,6 +36,7 @@ export default function LeafletMap({ locationPoints = [] }) {
     const mapInstanceRef = React.useRef(null);
     const tileLayerRef = React.useRef(null);
     const markerLayerRef = React.useRef(null);
+    const hasInitialViewportRef = React.useRef(false);
     const [loaded, setLoaded] = React.useState(false);
     const [mapTheme, setMapTheme] = React.useState('voyager');
 
@@ -103,6 +104,7 @@ export default function LeafletMap({ locationPoints = [] }) {
             mapInstanceRef.current = null;
             tileLayerRef.current = null;
             markerLayerRef.current = null;
+            hasInitialViewportRef.current = false;
         };
     }, [loaded]);
 
@@ -137,7 +139,9 @@ export default function LeafletMap({ locationPoints = [] }) {
         markerLayer.clearLayers();
 
         if (normalizedPoints.length === 0) {
-            map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+            if (!hasInitialViewportRef.current) {
+                map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+            }
             return;
         }
 
@@ -179,12 +183,14 @@ export default function LeafletMap({ locationPoints = [] }) {
             bounds.push([point.latitude, point.longitude]);
         });
 
-        if (bounds.length === 1) {
-            map.setView(bounds[0], 10);
-            return;
+        if (!hasInitialViewportRef.current) {
+            if (bounds.length === 1) {
+                map.setView(bounds[0], 10);
+            } else {
+                map.fitBounds(bounds, { padding: [30, 30], maxZoom: 10 });
+            }
+            hasInitialViewportRef.current = true;
         }
-
-        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 10 });
     }, [loaded, normalizedPoints]);
 
     return (

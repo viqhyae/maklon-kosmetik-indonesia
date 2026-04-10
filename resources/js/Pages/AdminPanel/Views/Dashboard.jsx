@@ -72,8 +72,6 @@ export default function createDashboard(context) {
     const Dashboard = () => {
         const {
             currentWeekSeries,
-            currentWeekTotal,
-            previousWeekTotal,
             axisTicks,
             axisMax,
             trendPercent,
@@ -121,8 +119,6 @@ export default function createDashboard(context) {
 
             return {
                 currentWeekSeries: weeklySeries,
-                currentWeekTotal: safeCurrentWeekTotal,
-                previousWeekTotal: safePreviousWeekTotal,
                 axisTicks: safeAxisTicks,
                 axisMax: safeAxisMax,
                 trendPercent: Math.abs(safeTrendPercent),
@@ -201,7 +197,7 @@ export default function createDashboard(context) {
                                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                                     <Activity size={18} className="text-[#C1986E]" /> Grafik Aktivitas Scan
                                 </h3>
-                                <p className="text-xs text-slate-500 mt-1">Minggu Berjalan (Reset Setiap Senin)</p>
+                                <p className="text-xs text-slate-500 mt-1">Reset Tiap Senin</p>
                             </div>
                             <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full font-medium border ${trendPillClassName}`}>
                                 <TrendingUp size={16} /> {trendText}
@@ -225,8 +221,8 @@ export default function createDashboard(context) {
                                             <Tooltip text={`${new Intl.NumberFormat('id-ID').format(item.count)} aktivitas`} position="top" wrapperClass="w-full h-full flex items-end justify-center">
                                                 <div className="absolute inset-0 w-full h-full bg-slate-50/30 rounded-t-sm transition-colors group-hover:bg-slate-100/50 pointer-events-none"></div>
                                                 <div
-                                                    className="w-full bg-gradient-to-t from-[#C1986E] to-[#e6bd95] rounded-t-sm transition-opacity duration-300 group-hover:opacity-80 animate-bar"
-                                                    style={{ height: item.count > 0 ? `${Math.max((item.count / axisMax) * 100, 1)}%` : '0%', animationDelay: `${idx * 100}ms` }}
+                                                    className="w-full bg-gradient-to-t from-[#C1986E] to-[#e6bd95] rounded-t-sm transition-[height,opacity] duration-500 group-hover:opacity-80"
+                                                    style={{ height: item.count > 0 ? `${Math.max((item.count / axisMax) * 100, 1)}%` : '0%' }}
                                                 ></div>
                                             </Tooltip>
                                         </div>
@@ -238,11 +234,6 @@ export default function createDashboard(context) {
                                     <div key={idx} className="flex-1 text-center text-[10px] sm:text-xs font-medium text-slate-500">{day}</div>
                                 ))}
                             </div>
-                            <div className="mt-3 text-[11px] text-slate-500">
-                                Total minggu ini: <span className="font-semibold text-slate-700">{new Intl.NumberFormat('id-ID').format(currentWeekTotal)}</span>
-                                {' • '}
-                                Minggu lalu: <span className="font-semibold text-slate-700">{new Intl.NumberFormat('id-ID').format(previousWeekTotal)}</span>
-                            </div>
                         </div>
                     </div>
 
@@ -252,7 +243,7 @@ export default function createDashboard(context) {
                                 <MapPin size={18} className="text-[#C1986E]" /> Sistem Pelacakan Distribusi
                             </h3>
                             <Tooltip text="Live Data" position="left">
-                                <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse cursor-help"></div>
+                                <div className="w-2.5 h-2.5 bg-red-500 rounded-full cursor-help"></div>
                             </Tooltip>
                         </div>
                         <div className="w-full h-[350px] md:h-[500px] rounded-xl overflow-hidden border border-slate-200 z-0 shadow-inner">
