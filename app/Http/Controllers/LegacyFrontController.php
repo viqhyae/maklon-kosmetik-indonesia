@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppSetting;
 use App\Models\ScanActivity;
 use App\Models\TagCode;
 use Carbon\Carbon;
@@ -9,13 +10,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class LegacyFrontController extends Controller
 {
     public function index(): View
     {
-        return view('front.page.home');
+        return view('front.page.home', [
+            'requireGps' => $this->isGpsRequired(),
+        ]);
     }
 
     public function kode(Request $request): JsonResponse
@@ -23,6 +27,13 @@ class LegacyFrontController extends Controller
         $kode = strtoupper(str_replace('-', '', strip_tags((string) $request->input('kode'))));
         if ($kode === '') {
             return response()->json('', 204);
+        }
+
+        $coordinates = $this->extractCoordinatesFromRequest($request);
+        if ($this->isGpsRequired() && ($coordinates['latitude'] === null || $coordinates['longitude'] === null)) {
+            return response()->json([
+                'message' => 'Izin lokasi wajib diaktifkan untuk verifikasi kode. Aktifkan GPS, lalu coba lagi.',
+            ], 422);
         }
 
         $tagCode = TagCode::query()
@@ -59,7 +70,6 @@ class LegacyFrontController extends Controller
         }
         $suspendReason = $this->resolveSuspendReason($tagCode);
 
-        $coordinates = $this->extractCoordinatesFromRequest($request);
         $resolvedIpAddress = $this->resolveClientIpAddress($request);
         $geo = $this->resolveLocation(
             $resolvedIpAddress,
@@ -403,6 +413,24 @@ class LegacyFrontController extends Controller
         }
 
         return (float) number_format($coordinate, 6, '.', '');
+    }
+
+    private function isGpsRequired(): bool
+    {
+        if (!Schema::hasTable('app_settings')) {
+            return false;
+        }
+
+        return Cache::remember('security.require_gps', now()->addMinutes(10), function () {
+            $storedValue = AppSetting::getValue('require_gps', '1');
+            return $this->toBoolSetting($storedValue);
+        });
+    }
+
+    private function toBoolSetting(mixed $value): bool
+    {
+        $normalized = strtolower(trim((string) $value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     private function skipExternalLocationLookup(): bool

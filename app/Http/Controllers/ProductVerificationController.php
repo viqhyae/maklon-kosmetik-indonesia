@@ -8,6 +8,7 @@ use App\Models\TagCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class ProductVerificationController extends Controller
 {
@@ -27,6 +28,13 @@ class ProductVerificationController extends Controller
             return response()->json([
                 'exists' => false,
                 'message' => 'Kode verifikasi wajib diisi.',
+            ], 422);
+        }
+
+        if ($this->isGpsRequired() && !$this->hasCoordinates($validated)) {
+            return response()->json([
+                'exists' => false,
+                'message' => 'Izin lokasi wajib diaktifkan untuk verifikasi kode. Aktifkan GPS, lalu coba lagi.',
             ], 422);
         }
 
@@ -125,7 +133,7 @@ class ProductVerificationController extends Controller
 
     private function getMaxValidScanLimit(): int
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('app_settings')) {
+        if (!Schema::hasTable('app_settings')) {
             return self::DEFAULT_MAX_VALID_SCAN_LIMIT;
         }
 
@@ -134,6 +142,28 @@ class ProductVerificationController extends Controller
             $parsedValue = (int) ($storedValue ?? self::DEFAULT_MAX_VALID_SCAN_LIMIT);
 
             return $parsedValue > 0 ? $parsedValue : self::DEFAULT_MAX_VALID_SCAN_LIMIT;
+        });
+    }
+
+    private function hasCoordinates(array $validated): bool
+    {
+        $hasLatitude = array_key_exists('latitude', $validated) && $validated['latitude'] !== null;
+        $hasLongitude = array_key_exists('longitude', $validated) && $validated['longitude'] !== null;
+
+        return $hasLatitude && $hasLongitude;
+    }
+
+    private function isGpsRequired(): bool
+    {
+        if (!Schema::hasTable('app_settings')) {
+            return false;
+        }
+
+        return Cache::remember('security.require_gps', now()->addMinutes(10), function () {
+            $storedValue = AppSetting::getValue('require_gps', '1');
+            $normalized = strtolower(trim((string) $storedValue));
+
+            return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
         });
     }
 

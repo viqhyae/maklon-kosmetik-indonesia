@@ -161,15 +161,9 @@ export default function LeafletMap({ locationPoints = [] }) {
             });
 
             const tooltipHtml = `
-        <div style="font-size:12px;line-height:1.45;min-width:170px;">
+        <div style="font-size:12px;line-height:1.4;min-width:120px;">
           <div style="font-weight:700;color:#0f172a;">${escapeHtml(point.city)}</div>
-          <div style="color:#334155;margin-top:2px;">${new Intl.NumberFormat('id-ID').format(point.scans)} aktivitas scan</div>
-          <div style="margin-top:4px;color:#475569;">
-            <div>Asli: ${new Intl.NumberFormat('id-ID').format(point.originalCount)}</div>
-            <div>Peringatan: ${new Intl.NumberFormat('id-ID').format(point.warningCount)}</div>
-            <div>Recall: ${new Intl.NumberFormat('id-ID').format(point.suspendedCount)}</div>
-          </div>
-          <div style="margin-top:4px;font-weight:600;color:${markerStyle.color};">${markerStyle.label}</div>
+          <div style="color:#334155;margin-top:2px;">${new Intl.NumberFormat('id-ID').format(point.scans)} Scans</div>
         </div>
       `;
 

@@ -25,6 +25,7 @@ class SecuritySettingController extends Controller
         AppSetting::setValue('email_notif', $validated['email_notif'] ? '1' : '0');
 
         Cache::forget('security.max_valid_scan_limit');
+        Cache::forget('security.require_gps');
 
         return response()->json([
             'settings' => [

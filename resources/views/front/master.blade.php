@@ -59,118 +59,179 @@
                 timeout: 4500,
                 maximumAge: 300000
             };
+            var requireGpsForScan = @json(isset($requireGps) ? (bool) $requireGps : false);
 
             var setScanCoordinates = function(latitude, longitude) {
                 $("#scan-latitude").val(latitude);
                 $("#scan-longitude").val(longitude);
             };
 
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    if (!position || !position.coords) {
+            var hasScanCoordinates = function() {
+                var latitude = String($("#scan-latitude").val() || '').trim();
+                var longitude = String($("#scan-longitude").val() || '').trim();
+                return latitude !== '' && longitude !== '';
+            };
+
+            var resolveScanCoordinates = function() {
+                return new Promise(function(resolve, reject) {
+                    if (!navigator.geolocation) {
+                        reject('Browser Anda tidak mendukung akses lokasi GPS.');
                         return;
                     }
 
-                    var latitude = Number(position.coords.latitude);
-                    var longitude = Number(position.coords.longitude);
-                    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-                        return;
-                    }
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        if (!position || !position.coords) {
+                            reject('Lokasi GPS tidak terbaca. Aktifkan izin lokasi lalu coba lagi.');
+                            return;
+                        }
 
-                    setScanCoordinates(latitude.toFixed(6), longitude.toFixed(6));
-                }, function() {
+                        var latitude = Number(position.coords.latitude);
+                        var longitude = Number(position.coords.longitude);
+                        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                            reject('Koordinat lokasi tidak valid. Aktifkan GPS lalu coba lagi.');
+                            return;
+                        }
+
+                        setScanCoordinates(latitude.toFixed(6), longitude.toFixed(6));
+                        resolve({
+                            latitude: latitude.toFixed(6),
+                            longitude: longitude.toFixed(6)
+                        });
+                    }, function() {
+                        reject('Izin lokasi wajib diaktifkan untuk verifikasi kode.');
+                    }, geolocationOptions);
+                });
+            };
+
+            if (requireGpsForScan) {
+                resolveScanCoordinates().catch(function() {
+                    Swal.fire({
+                        icon: "info",
+                        title: "Izin Lokasi Diperlukan",
+                        text: "Silakan aktifkan izin lokasi (GPS) agar verifikasi kode dapat diproses."
+                    });
+                });
+            } else if (navigator.geolocation) {
+                resolveScanCoordinates().catch(function() {
                     // Ignore geolocation errors and fallback to IP-based lookup.
-                }, geolocationOptions);
+                });
             }
 
             $("#idForm").submit(function(e) {
-
                 // avoid to execute the actual submit of the form.
-                e.preventDefault(); 
+                e.preventDefault();
 
                 var form = $(this);
                 var actionUrl = form.attr('action');
 
-                $.ajax({
-                    type: "POST",
-                    url: actionUrl,
-                    data: form.serialize(), // serializes the form's elements.
-                    success: function(xml, textStatus, xhr){
-                        if(xhr.status == 200){
-                            if(xml.ke == 0){
-                                Swal.fire({
-                                    title: "BERHASIL",
-                                    html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
-                                        <b>Verifikasi kode yang pertama (1/3)</b><br><br> 
-                                        Silakan menikmati produk Anda. <br><br>
-                                        Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
-                                        Verifikasi pertama : `+xml.tgl+` <br>
-                                        Verifikasi kedua : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <br>
-                                        Verifikasi ketiga : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `,
-                                    icon: "success"
-                                });
-                            }
-                            else if(xml.ke == 1){
-                                Swal.fire({
-                                    title: "BERHASIL",
-                                    html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
-                                        <b>Verifikasi kode yang kedua (2/3) </b><br><br> 
-                                        Silakan menikmati produk Anda. <br><br>
-                                        Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
-                                        Verifikasi pertama : `+xml.tgl+` <br>
-                                        Verifikasi kedua : `+xml.tgl2+` <br>
-                                        Verifikasi ketiga : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `,
-                                    icon: "success"
-                                });
-                            }
-                            else if(xml.ke == 2){
-                                Swal.fire({
-                                    title: "BERHASIL",
-                                    html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
-                                        <b>Verifikasi kode yang ketiga (3/3)</b><br><br> 
-                                        Silakan menikmati produk Anda. <br><br>
-                                        Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
-                                        Verifikasi pertama : `+xml.tgl+` <br>
-                                        Verifikasi kedua   : `+xml.tgl2+` <br>
-                                        Verifikasi ketiga : `+xml.tgl3,
-                                    icon: "success"
-                                });
-                            }
-                            else if(xml.ke >= 3){
-                                Swal.fire({
-                                    icon: "warning",
-                                    title: "WASPADA",
-                                    html: `Kode telah diverifikasi `+(xml.ke+1)+` kali<br><br>
-                                        Verifikasi pertama : `+xml.tgl+` <br>
-                                        Verifikasi kedua   : `+xml.tgl2+` <br>
-                                        Verifikasi ketiga : `+xml.tgl3,
-                                    // footer: '<div class="tooltipku"><span class="tooltiptext">Cek kode pada produk, pastikan kode benar dan sesuai. <br>Jika kode verfikasi tetap mengalami kegagalan, <br>hubungi kami di 085182025567.</span>Kenapa kode saya gagal?</div>'
-                                });
+                var executeVerification = function() {
+                    $.ajax({
+                        type: "POST",
+                        url: actionUrl,
+                        data: form.serialize(), // serializes the form's elements.
+                        success: function(xml, textStatus, xhr){
+                            if(xhr.status == 200){
+                                if(xml.ke == 0){
+                                    Swal.fire({
+                                        title: "BERHASIL",
+                                        html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
+                                            <b>Verifikasi kode yang pertama (1/3)</b><br><br> 
+                                            Silakan menikmati produk Anda. <br><br>
+                                            Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
+                                            Verifikasi pertama : `+xml.tgl+` <br>
+                                            Verifikasi kedua : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <br>
+                                            Verifikasi ketiga : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `,
+                                        icon: "success"
+                                    });
+                                }
+                                else if(xml.ke == 1){
+                                    Swal.fire({
+                                        title: "BERHASIL",
+                                        html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
+                                            <b>Verifikasi kode yang kedua (2/3) </b><br><br> 
+                                            Silakan menikmati produk Anda. <br><br>
+                                            Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
+                                            Verifikasi pertama : `+xml.tgl+` <br>
+                                            Verifikasi kedua : `+xml.tgl2+` <br>
+                                            Verifikasi ketiga : - &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; `,
+                                        icon: "success"
+                                    });
+                                }
+                                else if(xml.ke == 2){
+                                    Swal.fire({
+                                        title: "BERHASIL",
+                                        html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br> <br>
+                                            <b>Verifikasi kode yang ketiga (3/3)</b><br><br> 
+                                            Silakan menikmati produk Anda. <br><br>
+                                            Total Verifikasi : `+(xml.ke+1)+`  dari 3 kali<br>
+                                            Verifikasi pertama : `+xml.tgl+` <br>
+                                            Verifikasi kedua   : `+xml.tgl2+` <br>
+                                            Verifikasi ketiga : `+xml.tgl3,
+                                        icon: "success"
+                                    });
+                                }
+                                else if(xml.ke >= 3){
+                                    Swal.fire({
+                                        icon: "warning",
+                                        title: "WASPADA",
+                                        html: `Kode telah diverifikasi `+(xml.ke+1)+` kali<br><br>
+                                            Verifikasi pertama : `+xml.tgl+` <br>
+                                            Verifikasi kedua   : `+xml.tgl2+` <br>
+                                            Verifikasi ketiga : `+xml.tgl3,
+                                        // footer: '<div class="tooltipku"><span class="tooltiptext">Cek kode pada produk, pastikan kode benar dan sesuai. <br>Jika kode verfikasi tetap mengalami kegagalan, <br>hubungi kami di 085182025567.</span>Kenapa kode saya gagal?</div>'
+                                    });
+                                }
+                                else{
+                                    Swal.fire({
+                                        title: "PERNAH DIVERIFIKASI",
+                                        html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br><br>
+                                            Silakan menikmati produk Anda. <br><br>
+                                            Total Verifikasi : `+(xml.ke+1)+` dari 3 kali<br>
+                                            Waktu verifikasi pertama : `+xml.tgl,
+                                        icon: "info",
+                                    });
+                                }
                             }
                             else{
                                 Swal.fire({
-                                    title: "PERNAH DIVERIFIKASI",
-                                    html: `Terima kasih telah mempercayakan pilihan Anda akan produk kami.<br><br>
-                                        Silakan menikmati produk Anda. <br><br>
-                                        Total Verifikasi : `+(xml.ke+1)+` dari 3 kali<br>
-                                        Waktu verifikasi pertama : `+xml.tgl,
-                                    icon: "info",
+                                    icon: "error",
+                                    title: "GAGAL",
+                                    text: "Kode verifikasi Salah",
+                                    footer: '<div class="tooltipku"><span class="tooltiptext">Cek kode pada produk, pastikan kode benar dan sesuai. <br>Jika kode verfikasi tetap mengalami kegagalan, <br>hubungi kami di 085182025567.</span>Kenapa kode saya gagal?</div>'
                                 });
                             }
-                            
-                        }
-                        else{
+                        },
+                        error: function(xhr) {
+                            var message = (xhr && xhr.responseJSON && xhr.responseJSON.message)
+                                ? xhr.responseJSON.message
+                                : "Terjadi kendala saat memeriksa kode. Silakan coba lagi.";
+                            var title = (xhr && xhr.status === 422) ? "Izin Lokasi Diperlukan" : "GAGAL";
+                            var icon = (xhr && xhr.status === 422) ? "warning" : "error";
+
                             Swal.fire({
-                                icon: "error",
-                                title: "GAGAL",
-                                text: "Kode verifikasi Salah",
-                                footer: '<div class="tooltipku"><span class="tooltiptext">Cek kode pada produk, pastikan kode benar dan sesuai. <br>Jika kode verfikasi tetap mengalami kegagalan, <br>hubungi kami di 085182025567.</span>Kenapa kode saya gagal?</div>'
+                                icon: icon,
+                                title: title,
+                                text: message
                             });
                         }
-                    }
-                });
+                    });
+                };
 
-                });
+                if (requireGpsForScan && !hasScanCoordinates()) {
+                    resolveScanCoordinates().then(function() {
+                        executeVerification();
+                    }).catch(function(message) {
+                        Swal.fire({
+                            icon: "warning",
+                            title: "Izin Lokasi Diperlukan",
+                            text: message || "Aktifkan izin lokasi (GPS) sebelum verifikasi kode."
+                        });
+                    });
+                    return;
+                }
+
+                executeVerification();
+            });
         </script>
     </body>
 

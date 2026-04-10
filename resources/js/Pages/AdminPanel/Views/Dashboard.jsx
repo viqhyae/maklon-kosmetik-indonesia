@@ -219,9 +219,8 @@ export default function createDashboard(context) {
                                     {currentWeekSeries.map((item, idx) => (
                                         <div key={idx} className="flex-1 h-full flex flex-col justify-end group cursor-pointer relative">
                                             <Tooltip text={`${new Intl.NumberFormat('id-ID').format(item.count)} aktivitas`} position="top" wrapperClass="w-full h-full flex items-end justify-center">
-                                                <div className="absolute inset-0 w-full h-full bg-slate-50/30 rounded-t-sm transition-colors group-hover:bg-slate-100/50 pointer-events-none"></div>
                                                 <div
-                                                    className="w-full bg-gradient-to-t from-[#C1986E] to-[#e6bd95] rounded-t-sm transition-[height,opacity] duration-500 group-hover:opacity-80"
+                                                    className="w-full bg-gradient-to-t from-[#C1986E] to-[#e6bd95] rounded-t-sm transition-[height] duration-500"
                                                     style={{ height: item.count > 0 ? `${Math.max((item.count / axisMax) * 100, 1)}%` : '0%' }}
                                                 ></div>
                                             </Tooltip>
