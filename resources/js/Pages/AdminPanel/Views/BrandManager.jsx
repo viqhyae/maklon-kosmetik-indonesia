@@ -11,91 +11,81 @@ import {
     Map,
     Plus,
     Trash2,
-    UploadCloud,
     X,
 } from 'lucide-react';
 
-export default function createBrandManager(context) {
+const brandManagerContextRef = { current: null };
+
+const BrandManager = () => {
+    const context = brandManagerContextRef.current;
+    if (!context) return null;
+
     const {
-        brandInput,
         brands,
         brandSort,
         brokenBrandLogoIds,
         buildBrandLogoSrc,
-        editingBrandId,
         globalSearch,
-        handleCancelEditBrand,
         handleDeleteBrand,
         handleEditBrand,
-        handleSaveBrand,
         handleSortChange,
         isBrandActive,
-        isBrandModalOpen,
-        isSavingBrand,
         isBrandOwnerRole,
-        isUserActive,
-        logoPreview,
         markBrandLogoBroken,
         normalizeBrandStatus,
-        normalizeUserRole,
         openCreateBrandModal,
         PageAlert,
         products,
         savingBrandStatusId,
-        setBrandInput,
         setBrandSort,
-        setLogoFile,
-        setLogoPreviewFromFile,
         SortIcon,
-        systemUsers,
         toggleBrandStatusAutoSave,
         ToggleSwitch,
         Tooltip,
     } = context;
-    const BrandManager = () => {
-        const [previewBrand, setPreviewBrand] = React.useState(null);
-        const searchQuery = globalSearch.toLowerCase().trim();
-        const productCountByBrandId = {};
+    const [previewBrand, setPreviewBrand] = React.useState(null);
+    const searchQuery = globalSearch.toLowerCase().trim();
+    const productCountByBrandId = {};
 
-        for (const product of products) {
-            const brandId = Number(product.brandId);
-            if (!Number.isFinite(brandId)) continue;
-            productCountByBrandId[brandId] = (productCountByBrandId[brandId] || 0) + 1;
-        }
+    for (const product of products) {
+        const brandId = Number(product.brandId);
+        if (!Number.isFinite(brandId)) continue;
+        productCountByBrandId[brandId] = (productCountByBrandId[brandId] || 0) + 1;
+    }
 
-        const filteredBrands = brands.filter((brand) => {
-            if (!searchQuery) return true;
-
-            return (
-                brand.name.toLowerCase().includes(searchQuery) ||
-                (brand.brand_code && brand.brand_code.toLowerCase().includes(searchQuery)) ||
-                (brand.owner_name && brand.owner_name.toLowerCase().includes(searchQuery)) ||
-                (brand.description && brand.description.toLowerCase().includes(searchQuery))
-            );
-        }).sort((a, b) => {
-            const dir = brandSort.direction === 'asc' ? 1 : -1;
-            if (brandSort.key === 'name') return a.name.localeCompare(b.name) * dir;
-            if (brandSort.key === 'status') {
-                if (a.status === b.status) return 0;
-                return (normalizeBrandStatus(a.status) === 1 ? -1 : 1) * dir;
-            }
-            if (brandSort.key === 'sku') {
-                const countA = productCountByBrandId[Number(a.id)] || 0;
-                const countB = productCountByBrandId[Number(b.id)] || 0;
-                return (countA - countB) * dir;
-            }
-            if (brandSort.key === 'owner') {
-                const ownerA = a.owner_name || '';
-                const ownerB = b.owner_name || '';
-                return ownerA.localeCompare(ownerB) * dir;
-            }
-            return (a.id - b.id) * dir;
-        });
-        const previewBrandLogoSrc = previewBrand ? buildBrandLogoSrc(previewBrand) : null;
-        const isPreviewLogoBroken = previewBrand ? brokenBrandLogoIds.includes(previewBrand.id) : false;
-        const previewBrandSkuCount = previewBrand ? (productCountByBrandId[Number(previewBrand.id)] || 0) : 0;
+    const filteredBrands = brands.filter((brand) => {
+        if (!searchQuery) return true;
 
         return (
+            brand.name.toLowerCase().includes(searchQuery) ||
+            (brand.brand_code && brand.brand_code.toLowerCase().includes(searchQuery)) ||
+            (brand.owner_name && brand.owner_name.toLowerCase().includes(searchQuery)) ||
+            (brand.description && brand.description.toLowerCase().includes(searchQuery))
+        );
+    }).sort((a, b) => {
+        const dir = brandSort.direction === 'asc' ? 1 : -1;
+        if (brandSort.key === 'name') return a.name.localeCompare(b.name) * dir;
+        if (brandSort.key === 'status') {
+            if (a.status === b.status) return 0;
+            return (normalizeBrandStatus(a.status) === 1 ? -1 : 1) * dir;
+        }
+        if (brandSort.key === 'sku') {
+            const countA = productCountByBrandId[Number(a.id)] || 0;
+            const countB = productCountByBrandId[Number(b.id)] || 0;
+            return (countA - countB) * dir;
+        }
+        if (brandSort.key === 'owner') {
+            const ownerA = a.owner_name || '';
+            const ownerB = b.owner_name || '';
+            return ownerA.localeCompare(ownerB) * dir;
+        }
+        return (a.id - b.id) * dir;
+    });
+    const previewBrandLogoSrc = previewBrand ? buildBrandLogoSrc(previewBrand) : null;
+    const isPreviewLogoBroken = previewBrand ? brokenBrandLogoIds.includes(previewBrand.id) : false;
+    const previewBrandSkuCount = previewBrand ? (productCountByBrandId[Number(previewBrand.id)] || 0) : 0;
+
+    return (
             <div className="space-y-6 animate-in fade-in duration-500">
                 <PageAlert text="Halaman ini digunakan untuk mengelola data master Brand. Klik pada judul kolom di tabel untuk mengurutkan data." />
 
@@ -338,112 +328,11 @@ export default function createBrandManager(context) {
                         </div>
                     </div>
                 )}
-
-                {/* Modal Tambah/Edit Brand */}
-                {isBrandModalOpen && (
-                    <div
-                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-                        onClick={() => { if (!isSavingBrand) handleCancelEditBrand(); }} // Fungsi tutup saat klik background
-                    >
-                        <div
-                            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
-                            onClick={(e) => e.stopPropagation()} // Mencegah klik di dalam modal menutup modal
-                        >
-                            <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center">
-                                <h3 className="font-bold flex items-center gap-2 text-slate-800">
-                                    {editingBrandId ? <Edit size={18} className="text-[#C1986E]" /> : <Building2 size={18} className="text-[#C1986E]" />}
-                                    {editingBrandId ? "Edit Data Brand" : "Registrasi Brand Baru"}
-                                </h3>
-                                <button disabled={isSavingBrand} onClick={handleCancelEditBrand} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"><X size={18} /></button>
-                            </div>
-
-                            <form onSubmit={handleSaveBrand} className="flex flex-col overflow-hidden">
-                                <div className="p-6 overflow-y-auto custom-scrollbar">
-                                    <div className="flex flex-col sm:flex-row gap-6 items-start">
-
-                                        {/* Area Upload Logo (Rasio 1:1) */}
-                                        {/* KOTAK UPLOAD LOGO YANG SUDAH BERFUNGSI */}
-                                        <label className="w-full sm:w-40 aspect-square border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-[#C1986E] transition-all group bg-slate-50/50 p-4 flex-shrink-0 relative overflow-hidden">
-                                            <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={(e) => {
-                                                    const file = e.target.files[0];
-                                                    if (file) {
-                                                        setLogoFile(file);
-                                                        setLogoPreviewFromFile(file);
-                                                    }
-                                                }}
-                                            />
-
-                                            {/* Jika ada preview gambar, tampilkan gambarnya. Jika tidak, tampilkan ikon cloud */}
-                                            {logoPreview ? (
-                                                <img src={logoPreview} alt="Preview" className="w-full h-full object-cover absolute inset-0" />
-                                            ) : (
-                                                <>
-                                                    <div className="bg-white p-3 rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
-                                                        <UploadCloud className="group-hover:text-[#C1986E]" size={20} />
-                                                    </div>
-                                                    <span className="text-[11px] font-medium text-center px-2">Logo Brand</span>
-                                                    <span className="text-[9px] text-slate-300 mt-1">(1:1 Ratio)</span>
-                                                </>
-                                            )}
-                                        </label>
-
-                                        <div className="flex-1 w-full space-y-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nama Brand</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Contoh: BeautyCare ID"
-                                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] transition-shadow text-sm"
-                                                    value={brandInput.name}
-                                                    onChange={(e) => setBrandInput({ ...brandInput, name: e.target.value })}
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Pemilik Brand (Brand Owner)</label>
-                                                <select
-                                                    className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] bg-white text-sm"
-                                                    value={brandInput.owner_name}
-                                                    onChange={(e) => setBrandInput({ ...brandInput, owner_name: e.target.value })}
-                                                >
-                                                    <option value="">-- Pilih Pemilik (Opsional) --</option>
-                                                    {systemUsers
-                                                        .filter((user) => normalizeUserRole(user.role) === "Brand Owner" && isUserActive(user.status))
-                                                        .map((user) => (
-                                                        <option key={user.id} value={user.name}>{user.name}</option>
-                                                        ))}
-                                                </select>
-                                                <p className="text-[10px] text-slate-400">Pilih pengguna yang akan memiliki akses ke data analitik brand ini.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-4 space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Deskripsi / Catatan</label>
-                                        <textarea
-                                            rows="3"
-                                            placeholder="Deskripsi singkat brand atau catatan khusus..."
-                                            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] transition-shadow resize-none text-sm"
-                                            value={brandInput.description}
-                                            onChange={(e) => setBrandInput({ ...brandInput, description: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
-                                    <button type="button" disabled={isSavingBrand} onClick={handleCancelEditBrand} className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm disabled:opacity-40 disabled:cursor-not-allowed">Batal</button>
-                                    <button type="submit" disabled={isSavingBrand} className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingBrand ? "Menyimpan..." : (editingBrandId ? "Simpan Perubahan" : "Simpan Brand")}</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
             </div>
-        );
-    };
+    );
+};
 
+export default function createBrandManager(context) {
+    brandManagerContextRef.current = context;
     return BrandManager;
 }

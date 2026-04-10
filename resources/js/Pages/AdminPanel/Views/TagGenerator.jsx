@@ -149,7 +149,7 @@ export default function createTagGenerator(context) {
                 isOpen: true,
                 title: isSuspending ? "Suspend / Recall Batch?" : "Aktifkan Kembali Batch?",
                 message: isSuspending
-                    ? `PERINGATAN: Menonaktifkan batch ${batchId} akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan. Lanjutkan?`
+                    ? `PERINGATAN: Menonaktifkan batch akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan. Lanjutkan?`
                     : `Batch ${batchId} akan diaktifkan kembali dan tag di dalamnya akan kembali berstatus valid saat di-scan. Lanjutkan?`,
                 onConfirm: () => {
                     if (isBatchPendingAction(batchId)) return;
@@ -320,7 +320,7 @@ export default function createTagGenerator(context) {
         });
         const suspendReasonLength = String(suspendReasonInput || '').length;
         const suspendReasonWarningMessage = suspendReasonModal.batchId
-            ? `PERINGATAN: Menonaktifkan batch ${suspendReasonModal.batchId} akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan.`
+            ? `PERINGATAN: Menonaktifkan batch akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan.`
             : 'PERINGATAN: Menonaktifkan batch akan membuat SEMUA tag di dalamnya berstatus INVALID/RECALL saat di-scan oleh pelanggan.';
 
         return (

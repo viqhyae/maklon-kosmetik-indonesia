@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
 import {
+    Building2,
     Search,
     ChevronRight,
     ChevronLeft,
     AlertCircle,
     CheckCircle2,
+    Edit,
     LogOut,
     Moon,
     Sun,
+    UploadCloud,
+    X,
 } from 'lucide-react';
 import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -655,6 +659,7 @@ export default function AdminPanel({
     const userSubmitLockRef = useRef(false);
     const categorySubmitLockRef = useRef(false);
     const tagSubmitLockRef = useRef(false);
+    const brandModalSourceRef = useRef('brand');
 
     const transitionSetBrands = (updater) => {
         startTransition(() => {
@@ -885,13 +890,17 @@ export default function AdminPanel({
         setLogoPreview(null);
         setEditingBrandId(null);
         setIsBrandModalOpen(false);
+        brandModalSourceRef.current = 'brand';
     };
 
-    const openCreateBrandModal = () => {
+    const openCreateBrandModal = (options = {}) => {
+        const source = String(options?.source || 'brand');
+        brandModalSourceRef.current = source === 'product_form' ? 'product_form' : 'brand';
         brandSubmitLockRef.current = false;
         setIsSavingBrand(false);
         closeBrandModal();
         setIsBrandModalOpen(true);
+        brandModalSourceRef.current = source === 'product_form' ? 'product_form' : 'brand';
     };
 
     const toggleBrandStatusAutoSave = (brand) => {
@@ -995,6 +1004,9 @@ export default function AdminPanel({
         axios.post(targetUrl, payload)
             .then((response) => {
                 const savedBrand = normalizeBrandRecord(response?.data?.brand || {});
+                const shouldReturnToProductForm = !isEditing
+                    && brandModalSourceRef.current === 'product_form'
+                    && Boolean(savedBrand.id);
 
                 if (savedBrand.id) {
                     if (isEditing) {
@@ -1011,7 +1023,16 @@ export default function AdminPanel({
                 }
 
                 showToast(isEditing ? "Data brand berhasil diperbarui!" : "Brand baru berhasil ditambahkan!");
+                if (shouldReturnToProductForm) {
+                    setProductInput((currentInput) => ({
+                        ...currentInput,
+                        brandId: String(savedBrand.id),
+                    }));
+                }
                 closeBrandModal();
+                if (shouldReturnToProductForm) {
+                    setActiveTab('product_form');
+                }
             })
             .catch((error) => {
                 const errors = error?.response?.data?.errors || {};
@@ -1102,15 +1123,28 @@ export default function AdminPanel({
         e.preventDefault();
         if (productSubmitLockRef.current || isSavingProduct) return;
 
+        const parseRequiredId = (value) => {
+            const numericValue = Number(value || 0);
+            return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : 0;
+        };
+        const parseOptionalId = (value) => {
+            const numericValue = Number(value || 0);
+            return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
+        };
+
         const trimmedName = String(productInput.name || '').trim();
         const normalizedSku = String(productInput.skuCode || '').trim().toUpperCase();
-        const brandId = Number(productInput.brandId || 0);
-        const catL1 = Number(productInput.catL1 || 0);
-        const catL2 = Number(productInput.catL2 || 0);
-        const catL3 = Number(productInput.catL3 || 0);
+        const brandId = parseRequiredId(productInput.brandId);
+        const catL1 = parseRequiredId(productInput.catL1);
+        const catL2 = parseOptionalId(productInput.catL2);
+        const catL3 = parseOptionalId(productInput.catL3);
 
-        if (!trimmedName || !brandId || !catL1 || !catL2 || !catL3 || !normalizedSku) {
+        if (!trimmedName || !brandId || !catL1 || !normalizedSku) {
             showToast("Mohon lengkapi data wajib produk (Nama, Brand, Kategori, Kode SKU).", "error");
+            return;
+        }
+        if (catL3 && !catL2) {
+            showToast("Struktur kategori tidak valid. Pilih Sub Kategori sebelum memilih Varian Akhir.", "error");
             return;
         }
 
@@ -1153,8 +1187,8 @@ export default function AdminPanel({
                 formData.append('sku_code', basePayload.sku_code);
                 formData.append('brand_id', String(basePayload.brand_id));
                 formData.append('cat_l1_id', String(basePayload.cat_l1_id));
-                formData.append('cat_l2_id', String(basePayload.cat_l2_id));
-                formData.append('cat_l3_id', String(basePayload.cat_l3_id));
+                formData.append('cat_l2_id', basePayload.cat_l2_id === null ? '' : String(basePayload.cat_l2_id));
+                formData.append('cat_l3_id', basePayload.cat_l3_id === null ? '' : String(basePayload.cat_l3_id));
                 formData.append('description', basePayload.description);
                 formData.append('image', productImageFile);
                 formData.append('image_upload_expected', '1');
@@ -2010,6 +2044,11 @@ export default function AdminPanel({
         item.id === 'tags' ? { ...item, label: 'Tag/QR Code' } : item
     );
     const systemItems = SYSTEM_ITEMS.filter((item) => !(isBrandOwnerRole && item.id === 'users'));
+    const isSidebarItemActive = (id) => (
+        id === 'product'
+            ? (activeTab === 'product' || activeTab === 'product_form')
+            : activeTab === id
+    );
 
     const SidebarItem = ({ icon: Icon, label, id, isSub = false }) => (
         <Tooltip text={isSidebarMinimized ? label : ""} position="right" wrapperClass={`w-full ${isSidebarMinimized ? 'flex justify-center' : ''}`}>
@@ -2017,13 +2056,13 @@ export default function AdminPanel({
                 onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); }}
                 className={`flex items-center gap-3 py-2.5 rounded-lg transition-all text-sm w-full
           ${isSidebarMinimized ? 'px-0 justify-center' : (isSub ? 'pl-9 pr-3 justify-start' : 'px-3 justify-start')}
-          ${activeTab === id
+          ${isSidebarItemActive(id)
                         ? 'bg-[#C1986E]/10 text-[#C1986E] font-bold border border-[#C1986E]/20'
                         : 'text-slate-600 hover:bg-slate-100 font-medium border border-transparent'
                     }
         `}
             >
-                <Icon size={isSub && !isSidebarMinimized ? 16 : 18} className={`${activeTab === id ? 'text-[#C1986E]' : 'text-slate-400'} flex-shrink-0`} />
+                <Icon size={isSub && !isSidebarMinimized ? 16 : 18} className={`${isSidebarItemActive(id) ? 'text-[#C1986E]' : 'text-slate-400'} flex-shrink-0`} />
                 {!isSidebarMinimized && <span className="truncate">{label}</span>}
             </button>
         </Tooltip>
@@ -2154,6 +2193,122 @@ export default function AdminPanel({
                     </div>
                 </div>
             </main>
+
+            {isBrandModalOpen && (
+                <div
+                    className="fixed inset-0 z-[400] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                    onClick={() => { if (!isSavingBrand) handleCancelEditBrand(); }}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="bg-slate-50 border-b border-slate-100 p-4 px-6 flex justify-between items-center">
+                            <h3 className="font-bold flex items-center gap-2 text-slate-800">
+                                {editingBrandId ? <Edit size={18} className="text-[#C1986E]" /> : <Building2 size={18} className="text-[#C1986E]" />}
+                                {editingBrandId ? "Edit Data Brand" : "Registrasi Brand Baru"}
+                            </h3>
+                            <button
+                                disabled={isSavingBrand}
+                                onClick={handleCancelEditBrand}
+                                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all p-1.5 rounded-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveBrand} className="flex flex-col overflow-hidden">
+                            <div className="p-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                                    <label className="w-full sm:w-40 aspect-square border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-50 hover:border-[#C1986E] transition-all group bg-slate-50/50 p-4 flex-shrink-0 relative overflow-hidden">
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={(event) => {
+                                                const file = event.target.files[0];
+                                                if (!file) return;
+                                                setLogoFile(file);
+                                                setLogoPreviewFromFile(file);
+                                            }}
+                                        />
+
+                                        {logoPreview ? (
+                                            <img src={logoPreview} alt="Preview" className="w-full h-full object-cover absolute inset-0" />
+                                        ) : (
+                                            <>
+                                                <div className="bg-white p-3 rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                                                    <UploadCloud className="group-hover:text-[#C1986E]" size={20} />
+                                                </div>
+                                                <span className="text-[11px] font-medium text-center px-2">Logo Brand</span>
+                                                <span className="text-[9px] text-slate-300 mt-1">(1:1 Ratio)</span>
+                                            </>
+                                        )}
+                                    </label>
+
+                                    <div className="flex-1 w-full space-y-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nama Brand</label>
+                                            <input
+                                                type="text"
+                                                placeholder="Contoh: BeautyCare ID"
+                                                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] transition-shadow text-sm"
+                                                value={brandInput.name}
+                                                onChange={(event) => setBrandInput({ ...brandInput, name: event.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Pemilik Brand (Brand Owner)</label>
+                                            <select
+                                                className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] bg-white text-sm"
+                                                value={brandInput.owner_name}
+                                                onChange={(event) => setBrandInput({ ...brandInput, owner_name: event.target.value })}
+                                            >
+                                                <option value="">-- Pilih Pemilik (Opsional) --</option>
+                                                {systemUsers
+                                                    .filter((user) => normalizeUserRole(user.role) === "Brand Owner" && isUserActive(user.status))
+                                                    .map((user) => (
+                                                        <option key={user.id} value={user.name}>{user.name}</option>
+                                                    ))}
+                                            </select>
+                                            <p className="text-[10px] text-slate-400">Pilih pengguna yang akan memiliki akses ke data analitik brand ini.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 space-y-1.5">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Deskripsi / Catatan</label>
+                                    <textarea
+                                        rows="3"
+                                        placeholder="Deskripsi singkat brand atau catatan khusus..."
+                                        className="w-full border border-slate-200 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#C1986E] transition-shadow resize-none text-sm"
+                                        value={brandInput.description}
+                                        onChange={(event) => setBrandInput({ ...brandInput, description: event.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="bg-slate-50 border-t border-slate-100 p-4 px-6 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    disabled={isSavingBrand}
+                                    onClick={handleCancelEditBrand}
+                                    className="px-6 py-2.5 rounded-lg font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all active:scale-95 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingBrand}
+                                    className="px-6 py-2.5 rounded-lg font-medium text-white bg-[#C1986E] hover:bg-[#A37E58] transition-all shadow-sm active:scale-95 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {isSavingBrand ? "Menyimpan..." : (editingBrandId ? "Simpan Perubahan" : "Simpan Brand")}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             <style dangerouslySetInnerHTML={{
                 __html: `

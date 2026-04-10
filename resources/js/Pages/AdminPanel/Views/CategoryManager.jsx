@@ -7,7 +7,12 @@ import {
     X,
 } from 'lucide-react';
 
-export default function createCategoryManager(context) {
+const categoryManagerContextRef = { current: null };
+
+const CategoryManager = () => {
+    const context = categoryManagerContextRef.current;
+    if (!context) return null;
+
     const {
         addCategory,
         categories,
@@ -28,13 +33,12 @@ export default function createCategoryManager(context) {
         setSelectedCatL2,
         Tooltip,
     } = context;
-    const CategoryManager = () => {
-        const selectedLevel1Category = categories.find((category) =>
-            isSameEntityId(category.id, selectedCatL1)
-        );
-        const selectedLevel2Category = selectedLevel1Category?.subCategories?.find((subCategory) =>
-            isSameEntityId(subCategory.id, selectedCatL2)
-        );
+    const selectedLevel1Category = categories.find((category) =>
+        isSameEntityId(category.id, selectedCatL1)
+    );
+    const selectedLevel2Category = selectedLevel1Category?.subCategories?.find((subCategory) =>
+        isSameEntityId(subCategory.id, selectedCatL2)
+    );
 
         return (
             <div className="space-y-6 animate-in fade-in duration-500">
@@ -206,7 +210,9 @@ export default function createCategoryManager(context) {
                 </div>
             </div>
         );
-    };
+};
 
+export default function createCategoryManager(context) {
+    categoryManagerContextRef.current = context;
     return CategoryManager;
 }

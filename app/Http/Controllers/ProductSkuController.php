@@ -24,8 +24,8 @@ class ProductSkuController extends Controller
         $this->ensureProductAccess($request, null, (int) $validated['brand_id']);
         $this->assertCategoryHierarchy(
             (int) $validated['cat_l1_id'],
-            (int) $validated['cat_l2_id'],
-            (int) $validated['cat_l3_id']
+            $this->nullableInteger($validated['cat_l2_id'] ?? null),
+            $this->nullableInteger($validated['cat_l3_id'] ?? null)
         );
 
         $productSku = ProductSku::query()->create([
@@ -33,8 +33,8 @@ class ProductSkuController extends Controller
             'sku_code' => strtoupper(trim((string) $validated['sku_code'])),
             'brand_id' => (int) $validated['brand_id'],
             'category_l1_id' => (int) $validated['cat_l1_id'],
-            'category_l2_id' => (int) $validated['cat_l2_id'],
-            'category_l3_id' => (int) $validated['cat_l3_id'],
+            'category_l2_id' => $this->nullableInteger($validated['cat_l2_id'] ?? null),
+            'category_l3_id' => $this->nullableInteger($validated['cat_l3_id'] ?? null),
             'description' => $this->nullableTrimmedString($validated['description'] ?? null),
             'image_url' => null,
             'dynamic_fields' => $this->normalizeDynamicFields($validated['dynamic_fields'] ?? []),
@@ -73,8 +73,8 @@ class ProductSkuController extends Controller
         $this->ensureProductAccess($request, $productSku, (int) $validated['brand_id']);
         $this->assertCategoryHierarchy(
             (int) $validated['cat_l1_id'],
-            (int) $validated['cat_l2_id'],
-            (int) $validated['cat_l3_id']
+            $this->nullableInteger($validated['cat_l2_id'] ?? null),
+            $this->nullableInteger($validated['cat_l3_id'] ?? null)
         );
 
         $productSku->update([
@@ -82,8 +82,8 @@ class ProductSkuController extends Controller
             'sku_code' => strtoupper(trim((string) $validated['sku_code'])),
             'brand_id' => (int) $validated['brand_id'],
             'category_l1_id' => (int) $validated['cat_l1_id'],
-            'category_l2_id' => (int) $validated['cat_l2_id'],
-            'category_l3_id' => (int) $validated['cat_l3_id'],
+            'category_l2_id' => $this->nullableInteger($validated['cat_l2_id'] ?? null),
+            'category_l3_id' => $this->nullableInteger($validated['cat_l3_id'] ?? null),
             'description' => $this->nullableTrimmedString($validated['description'] ?? null),
             'dynamic_fields' => $this->normalizeDynamicFields($validated['dynamic_fields'] ?? []),
         ]);
@@ -146,8 +146,8 @@ class ProductSkuController extends Controller
             ],
             'brand_id' => ['required', 'integer', 'exists:brands,id'],
             'cat_l1_id' => ['required', 'integer', 'exists:product_categories,id'],
-            'cat_l2_id' => ['required', 'integer', 'exists:product_categories,id'],
-            'cat_l3_id' => ['required', 'integer', 'exists:product_categories,id'],
+            'cat_l2_id' => ['nullable', 'integer', 'exists:product_categories,id'],
+            'cat_l3_id' => ['nullable', 'integer', 'exists:product_categories,id'],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'max:2048'],
             'image_upload_expected' => ['nullable', 'integer', Rule::in([0, 1])],
@@ -156,25 +156,58 @@ class ProductSkuController extends Controller
         ]);
     }
 
-    private function assertCategoryHierarchy(int $catL1Id, int $catL2Id, int $catL3Id): void
+    private function assertCategoryHierarchy(int $catL1Id, ?int $catL2Id, ?int $catL3Id): void
     {
         $catL1 = ProductCategory::query()->findOrFail($catL1Id);
-        $catL2 = ProductCategory::query()->findOrFail($catL2Id);
-        $catL3 = ProductCategory::query()->findOrFail($catL3Id);
+        if ((int) $catL1->level !== 1) {
+            throw ValidationException::withMessages([
+                'cat_l1_id' => ['Kategori level 1 tidak valid.'],
+            ]);
+        }
 
-        $isValid = $catL1->level === 1
-            && $catL2->level === 2
-            && $catL3->level === 3
-            && (int) $catL2->parent_id === (int) $catL1->id
-            && (int) $catL3->parent_id === (int) $catL2->id;
-
-        if ($isValid) {
+        if ($catL2Id === null && $catL3Id === null) {
             return;
         }
 
-        throw ValidationException::withMessages([
-            'cat_l3_id' => ['Struktur kategori produk tidak valid.'],
-        ]);
+        if ($catL2Id === null) {
+            throw ValidationException::withMessages([
+                'cat_l2_id' => ['Pilih Sub Kategori sebelum memilih Varian Akhir.'],
+            ]);
+        }
+
+        $catL2 = ProductCategory::query()->findOrFail($catL2Id);
+        $isValidL2 = (int) $catL2->level === 2
+            && (int) $catL2->parent_id === (int) $catL1->id;
+
+        if (!$isValidL2) {
+            throw ValidationException::withMessages([
+                'cat_l2_id' => ['Struktur kategori produk tidak valid.'],
+            ]);
+        }
+
+        if ($catL3Id === null) {
+            return;
+        }
+
+        $catL3 = ProductCategory::query()->findOrFail($catL3Id);
+        $isValidL3 = (int) $catL3->level === 3
+            && (int) $catL3->parent_id === (int) $catL2->id;
+
+        if (!$isValidL3) {
+            throw ValidationException::withMessages([
+                'cat_l3_id' => ['Struktur kategori produk tidak valid.'],
+            ]);
+        }
+    }
+
+    private function nullableInteger(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $numericValue = (int) $value;
+        return $numericValue > 0 ? $numericValue : null;
     }
 
     private function normalizeDynamicFields(array $dynamicFields): array

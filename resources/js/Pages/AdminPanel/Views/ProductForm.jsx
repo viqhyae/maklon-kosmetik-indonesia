@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+    Check,
+    ChevronDown,
     ChevronRight,
     Database,
     FileText,
@@ -8,12 +10,141 @@ import {
     Key,
     Map,
     Package,
+    Plus,
     Search,
     UploadCloud,
     X,
 } from 'lucide-react';
 
-export default function createProductForm(context) {
+const SearchableSingleSelect = ({
+    actionText,
+    disabled = false,
+    onActionClick,
+    onChange,
+    options = [],
+    placeholder = '-- Pilih --',
+    required = false,
+    searchPlaceholder = 'Cari...',
+    value = '',
+}) => {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [searchKeyword, setSearchKeyword] = React.useState('');
+    const rootRef = React.useRef(null);
+
+    const selectedOption = options.find((option) => String(option.value) === String(value)) || null;
+    const filteredOptions = options.filter((option) =>
+        option.label.toLowerCase().includes(searchKeyword.toLowerCase())
+    );
+
+    React.useEffect(() => {
+        if (!isOpen) return undefined;
+
+        const handleClickOutside = (event) => {
+            if (!rootRef.current?.contains(event.target)) {
+                setIsOpen(false);
+                setSearchKeyword('');
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const handleSelect = (nextValue) => {
+        onChange(nextValue);
+        setIsOpen(false);
+        setSearchKeyword('');
+    };
+
+    const handleToggle = () => {
+        if (disabled) return;
+        setIsOpen((prev) => !prev);
+        if (isOpen) setSearchKeyword('');
+    };
+
+    return (
+        <div ref={rootRef} className="relative">
+            <button
+                type="button"
+                onClick={handleToggle}
+                disabled={disabled}
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 min-h-[52px] focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm bg-slate-50/50 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-3"
+            >
+                <span className={selectedOption ? 'text-[#B58653] font-semibold' : 'text-slate-400'}>
+                    {selectedOption ? selectedOption.label : placeholder}
+                </span>
+                <ChevronDown size={18} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full mt-3 left-0 right-0 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                    <div className="p-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2 border border-[#C1986E] rounded-xl px-3 py-2.5">
+                            <Search size={16} className="text-slate-400 flex-shrink-0" />
+                            <input
+                                type="text"
+                                value={searchKeyword}
+                                onChange={(event) => setSearchKeyword(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Escape') {
+                                        setIsOpen(false);
+                                        setSearchKeyword('');
+                                    }
+                                }}
+                                placeholder={searchPlaceholder}
+                                autoFocus
+                                className="w-full bg-transparent border-none outline-none text-sm focus:ring-0 p-0"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto p-2 custom-scrollbar">
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((option) => {
+                                const isSelected = String(option.value) === String(value);
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => handleSelect(option.value)}
+                                        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors flex items-center justify-between gap-3 ${isSelected ? 'bg-[#C1986E]/10 text-[#B58653] font-semibold' : 'text-slate-700 hover:bg-slate-50'}`}
+                                    >
+                                        <span>{option.label}</span>
+                                        {isSelected && <Check size={16} className="text-[#C1986E] flex-shrink-0" />}
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="px-3 py-4 text-sm text-slate-400 text-center">Brand tidak ditemukan.</div>
+                        )}
+                    </div>
+
+                    {actionText && onActionClick && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsOpen(false);
+                                setSearchKeyword('');
+                                onActionClick();
+                            }}
+                            className="w-full border-t border-slate-100 px-4 py-3 text-[#C1986E] hover:bg-[#C1986E]/5 transition-colors text-sm font-semibold flex items-center justify-center gap-2"
+                        >
+                            <Plus size={16} />
+                            {actionText}
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const productFormContextRef = { current: null };
+
+const ProductForm = () => {
+    const context = productFormContextRef.current;
+    if (!context) return null;
+
     const {
         activeFormSection,
         brands,
@@ -24,6 +155,7 @@ export default function createProductForm(context) {
         isBrandActive,
         isCategoryModalOpen,
         isSavingProduct,
+        openCreateBrandModal,
         PRODUCT_SPEC_SCHEMA,
         productInput,
         productImagePreview,
@@ -37,9 +169,40 @@ export default function createProductForm(context) {
         tempCategory,
         Tooltip,
     } = context;
-    const ProductForm = () => {
-        // --- SAFEGUARD --- Memastikan dynamicFields selalu berupa objek
-        const currentDynamicFields = productInput.dynamicFields || {};
+    // --- SAFEGUARD --- Memastikan dynamicFields selalu berupa objek
+    const currentDynamicFields = productInput.dynamicFields || {};
+    const hasSelectedCategory = Boolean(productInput.catL1);
+    const activeBrandOptions = brands
+        .filter((brand) => isBrandActive(brand.status))
+        .map((brand) => ({
+            value: String(brand.id),
+            label: brand.name,
+        }));
+    const normalizeSelectOptions = (options = []) =>
+        options
+            .map((option) => {
+                if (option && typeof option === 'object') {
+                    const rawValue = option.value ?? option.id ?? option.label ?? option.name;
+                    const rawLabel = option.label ?? option.name ?? option.value ?? option.id;
+                    return {
+                        value: String(rawValue ?? '').trim(),
+                        label: String(rawLabel ?? '').trim(),
+                    };
+                }
+
+                const value = String(option ?? '').trim();
+                return { value, label: value };
+            })
+            .filter((option) => option.value !== '' && option.label !== '');
+    const updateDynamicField = (fieldName, value) => {
+        setProductInput({
+            ...productInput,
+            dynamicFields: {
+                ...currentDynamicFields,
+                [fieldName]: value,
+            },
+        });
+    };
 
         // --- HELPER SCROLL KE SEKSI FORM ---
         const scrollToSection = (sectionId) => {
@@ -182,53 +345,38 @@ export default function createProductForm(context) {
                                         <div className="text-right text-[10px] text-slate-400">{productInput.name.length}/255 Karakter</div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center justify-between">
-                                                <span>Kode SKU <span className="text-red-500">*</span></span>
-                                                <Tooltip text="Stock Keeping Unit (Kode Unik Internal Produk)"><Info size={14} className="text-slate-400 cursor-help" /></Tooltip>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="Contoh: GLW-FW-100"
-                                                className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm font-mono uppercase bg-slate-50/50 hover:bg-white"
-                                                value={productInput.skuCode || ''}
-                                                onChange={(e) => setProductInput({ ...productInput, skuCode: e.target.value })}
-                                                required
-                                            />
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Brand Utama <span className="text-red-500">*</span></label>
-                                            <select
-                                                className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm bg-slate-50/50 hover:bg-white cursor-pointer"
-                                                value={productInput.brandId || ''}
-                                                onChange={(e) => setProductInput({ ...productInput, brandId: e.target.value })}
-                                                required
-                                            >
-                                                <option value="" disabled>-- Pilih Brand Terdaftar --</option>
-                                                {brands.filter(b => isBrandActive(b.status)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                            </select>
-                                        </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center justify-between">
+                                            <span>Kode SKU <span className="text-red-500">*</span></span>
+                                            <Tooltip text="Stock Keeping Unit (Kode Unik Internal Produk)"><Info size={14} className="text-slate-400 cursor-help" /></Tooltip>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Contoh: GLW-FW-100"
+                                            className="w-full border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C1986E]/50 focus:border-[#C1986E] transition-all text-sm font-mono uppercase bg-slate-50/50 hover:bg-white"
+                                            value={productInput.skuCode || ''}
+                                            onChange={(e) => setProductInput({ ...productInput, skuCode: e.target.value })}
+                                            required
+                                        />
                                     </div>
 
                                     <div className="space-y-1.5 relative pt-2">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Kategori Produk <span className="text-red-500">*</span></label>
                                         <div
                                             onClick={openCategoryModal}
-                                            className={`w-full border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer transition-all text-sm group ${productInput.catL3 ? 'border-[#C1986E] bg-[#C1986E]/5 text-[#C1986E]' : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-[#C1986E]/50 text-slate-500'}`}
+                                            className={`w-full border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer transition-all text-sm group ${hasSelectedCategory ? 'border-[#C1986E] bg-[#C1986E]/5 text-[#C1986E]' : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-[#C1986E]/50 text-slate-500'}`}
                                         >
                                             <div className="flex flex-col">
-                                                {productInput.catL3 ? (
+                                                {hasSelectedCategory ? (
                                                     <>
-                                                        <span className="font-semibold text-slate-800">{getSelectedCategoryText(productInput.catL1, productInput.catL2, productInput.catL3).split(' > ').pop()}</span>
+                                                        <span className="font-semibold text-slate-800">{getSelectedCategoryText(productInput.catL1, productInput.catL2, productInput.catL3).split(' > ').pop() || getSelectedCategoryText(productInput.catL1, productInput.catL2, productInput.catL3)}</span>
                                                         <span className="text-[10px] text-[#C1986E] mt-0.5">{getSelectedCategoryText(productInput.catL1, productInput.catL2, productInput.catL3)}</span>
                                                     </>
                                                 ) : (
                                                     <span className="text-slate-400">Klik untuk mengatur kategori...</span>
                                                 )}
                                             </div>
-                                            <ChevronRight size={18} className={`transition-transform group-hover:translate-x-1 ${productInput.catL3 ? 'text-[#C1986E]' : 'text-slate-400'}`} />
+                                            <ChevronRight size={18} className={`transition-transform group-hover:translate-x-1 ${hasSelectedCategory ? 'text-[#C1986E]' : 'text-slate-400'}`} />
                                         </div>
                                     </div>
                                 </div>
@@ -236,46 +384,112 @@ export default function createProductForm(context) {
                         </div>
 
                         {/* BAGIAN 2: SPESIFIKASI DINAMIS */}
-                        <div id="form-spec" className="scroll-mt-44">
+                        <div id="form-spec" className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6 scroll-mt-44">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2 text-base border-b border-slate-100 pb-3">
+                                <Database size={18} className="text-[#C1986E]" /> Spesifikasi Produk
+                            </h3>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                    Brand / Merk <span className="text-red-500">*</span>
+                                </label>
+                                <SearchableSingleSelect
+                                    options={activeBrandOptions}
+                                    value={productInput.brandId || ''}
+                                    onChange={(selectedBrandId) => setProductInput({ ...productInput, brandId: selectedBrandId })}
+                                    placeholder="-- Pilih Brand Terdaftar --"
+                                    searchPlaceholder="Cari brand..."
+                                    required
+                                    disabled={isSavingProduct}
+                                    actionText="belum ada brand / merk ? daftarkan disini"
+                                    onActionClick={() => {
+                                        openCreateBrandModal({ source: 'product_form' });
+                                    }}
+                                />
+                            </div>
+
                             {PRODUCT_SPEC_SCHEMA[productInput.catL2] ? (() => {
                                 const schema = PRODUCT_SPEC_SCHEMA[productInput.catL2];
                                 const IconCmp = schema.icon;
                                 return (
-                                    <div className={`rounded-2xl p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300 border shadow-sm bg-white ${schema.theme.border}`}>
-                                        <h3 className={`font-bold flex items-center gap-2 text-base border-b border-slate-100 pb-3 ${schema.theme.title}`}>
-                                            <IconCmp size={18} /> {schema.title}
-                                        </h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {schema.fields.map((field) => (
-                                                <div key={field.name} className={`space-y-1.5 ${field.colSpan === 2 ? 'md:col-span-2' : ''}`}>
-                                                    <label className={`text-xs font-bold uppercase tracking-wide ${schema.theme.label}`}>{field.label}</label>
-                                                    {field.type === 'select' ? (
-                                                        <select
-                                                            className={`w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 text-sm bg-slate-50/50 hover:bg-white border transition-colors cursor-pointer ${schema.theme.input}`}
-                                                            value={currentDynamicFields[field.name] || ''}
-                                                            onChange={(e) => setProductInput({ ...productInput, dynamicFields: { ...currentDynamicFields, [field.name]: e.target.value } })}
-                                                        >
-                                                            <option value="">-- Pilih --</option>
-                                                            {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                        </select>
-                                                    ) : (
-                                                        <input
-                                                            type="text"
-                                                            placeholder={field.placeholder}
-                                                            className={`w-full rounded-xl px-4 py-3 focus:outline-none focus:ring-2 text-sm bg-slate-50/50 hover:bg-white border transition-colors ${schema.theme.input}`}
-                                                            value={currentDynamicFields[field.name] || ''}
-                                                            onChange={(e) => setProductInput({ ...productInput, dynamicFields: { ...currentDynamicFields, [field.name]: e.target.value } })}
-                                                        />
-                                                    )}
-                                                </div>
-                                            ))}
+                                    <div className={`rounded-xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-300 border ${schema.theme.bg}`}>
+                                        <h4 className={`font-bold flex items-center gap-2 text-sm border-b pb-3 ${schema.theme.title}`}>
+                                            <IconCmp size={16} /> {schema.title}
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            {schema.fields.map((field) => {
+                                                const fieldValue = currentDynamicFields[field.name] || '';
+                                                const isRequired = Boolean(field.required);
+                                                const fieldOptions = normalizeSelectOptions(field.options || []);
+
+                                                return (
+                                                    <div key={field.name} className={`space-y-1.5 ${field.colSpan === 2 ? 'md:col-span-2' : ''}`}>
+                                                        <label className={`text-xs font-bold uppercase tracking-wide ${schema.theme.label}`}>
+                                                            {field.label} {isRequired && <span className="text-red-500">*</span>}
+                                                        </label>
+
+                                                        {field.type === 'select' ? (
+                                                            <select
+                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white cursor-pointer ${schema.theme.input}`}
+                                                                value={fieldValue}
+                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
+                                                                required={isRequired}
+                                                            >
+                                                                <option value="">-- Pilih Opsi --</option>
+                                                                {fieldOptions.map((option) => (
+                                                                    <option key={`${field.name}-${option.value}`} value={option.value}>{option.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : field.type === 'multi-create' ? (
+                                                            <>
+                                                                <input
+                                                                    type="text"
+                                                                    list={`spec-option-list-${field.name}`}
+                                                                    placeholder={field.placeholder || 'Pisahkan beberapa nilai dengan koma'}
+                                                                    className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white ${schema.theme.input}`}
+                                                                    value={fieldValue}
+                                                                    onChange={(e) => updateDynamicField(field.name, e.target.value)}
+                                                                    required={isRequired}
+                                                                />
+                                                                {fieldOptions.length > 0 && (
+                                                                    <datalist id={`spec-option-list-${field.name}`}>
+                                                                        {fieldOptions.map((option) => (
+                                                                            <option key={`${field.name}-suggestion-${option.value}`} value={option.value}>
+                                                                                {option.label}
+                                                                            </option>
+                                                                        ))}
+                                                                    </datalist>
+                                                                )}
+                                                                <p className="text-[10px] text-slate-400">Pisahkan beberapa nilai dengan koma.</p>
+                                                            </>
+                                                        ) : field.type === 'date' ? (
+                                                            <input
+                                                                type="date"
+                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white cursor-pointer ${schema.theme.input}`}
+                                                                value={fieldValue}
+                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
+                                                                required={isRequired}
+                                                            />
+                                                        ) : (
+                                                            <input
+                                                                type="text"
+                                                                placeholder={field.placeholder}
+                                                                className={`w-full border rounded-xl px-4 py-2.5 min-h-[46px] focus:outline-none focus:ring-2 transition-all text-sm bg-slate-50/50 hover:bg-white ${schema.theme.input}`}
+                                                                value={fieldValue}
+                                                                onChange={(e) => updateDynamicField(field.name, e.target.value)}
+                                                                required={isRequired}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );
                             })() : (
-                                <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-8 text-center text-slate-400 text-sm shadow-sm flex flex-col items-center gap-2">
-                                    <Database size={24} className="text-slate-300" />
-                                    <p>Silakan pilih Kategori Produk terlebih dahulu untuk memunculkan form spesifikasi yang sesuai.</p>
+                                <div className="bg-slate-50 border border-slate-200 border-dashed rounded-xl p-6 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                                    <Database size={20} className="text-slate-300" />
+                                    <p>Silakan pilih Kategori Produk di atas untuk memunculkan spesifikasi tambahan.</p>
                                 </div>
                             )}
                         </div>
@@ -411,7 +625,7 @@ export default function createProductForm(context) {
                                     <button onClick={() => setIsCategoryModalOpen(false)} className="flex-1 sm:flex-none px-6 py-3 sm:py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">Batal</button>
                                     <button
                                         onClick={handleConfirmCategory}
-                                        disabled={!tempCategory.l3}
+                                        disabled={!tempCategory.l1}
                                         className="flex-1 sm:flex-none px-6 py-3 sm:py-2.5 rounded-xl text-sm font-bold text-white bg-[#C1986E] hover:bg-[#A37E58] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                                     >
                                         Konfirmasi
@@ -422,8 +636,10 @@ export default function createProductForm(context) {
                     </div>
                 )}
             </div>
-        );
-    };
+    );
+};
 
+export default function createProductForm(context) {
+    productFormContextRef.current = context;
     return ProductForm;
 }
