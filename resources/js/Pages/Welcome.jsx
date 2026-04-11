@@ -4,18 +4,19 @@ import { useMemo, useState } from 'react';
 
 const HIGH_ACCURACY_GEO_OPTIONS = {
     enableHighAccuracy: true,
-    timeout: 10000,
+    timeout: 4500,
     maximumAge: 0,
 };
 
 const FALLBACK_GEO_OPTIONS = {
     enableHighAccuracy: false,
-    timeout: 6000,
+    timeout: 2000,
     maximumAge: 60000,
 };
 
 const MAX_GEO_ATTEMPTS = 2;
 const MAX_ACCEPTABLE_ACCURACY_METERS = 1200;
+const GEO_SUBMIT_BUDGET_MS = 250;
 
 const requestBrowserPosition = (options) =>
     new Promise((resolve, reject) => {
@@ -74,6 +75,14 @@ const resolveBrowserCoordinates = async () => {
     return null;
 };
 
+const resolveCoordinatesWithinBudget = () =>
+    Promise.race([
+        resolveBrowserCoordinates(),
+        new Promise((resolve) => {
+            setTimeout(() => resolve(null), GEO_SUBMIT_BUDGET_MS);
+        }),
+    ]);
+
 export default function Welcome() {
     const [code, setCode] = useState('');
     const [result, setResult] = useState(null);
@@ -93,13 +102,34 @@ export default function Welcome() {
 
         setIsChecking(true);
         try {
-            const coordinates = await resolveBrowserCoordinates();
-            const response = await axios.get(route('public.verify-code'), {
-                params: {
-                    code: cleanedCode,
-                    ...(coordinates || {}),
-                },
-            });
+            const sendVerificationRequest = (coordinates = null) =>
+                axios.get(route('public.verify-code'), {
+                    params: {
+                        code: cleanedCode,
+                        ...(coordinates || {}),
+                    },
+                });
+
+            let response;
+            try {
+                response = await sendVerificationRequest();
+            } catch (initialError) {
+                const maybeLocationRequired = initialError?.response?.status === 422
+                    && /izin lokasi wajib/i.test(String(initialError?.response?.data?.message || ''));
+                if (!maybeLocationRequired) {
+                    throw initialError;
+                }
+
+                const quickCoordinates = await resolveCoordinatesWithinBudget();
+                const finalCoordinates = quickCoordinates || await resolveBrowserCoordinates();
+
+                if (!finalCoordinates) {
+                    throw initialError;
+                }
+
+                response = await sendVerificationRequest(finalCoordinates);
+            }
+
             setResult(response.data);
         } catch (error) {
             const validationMessage = error?.response?.data?.errors?.code?.[0];

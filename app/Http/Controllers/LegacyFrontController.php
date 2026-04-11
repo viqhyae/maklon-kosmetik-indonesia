@@ -24,7 +24,9 @@ class LegacyFrontController extends Controller
 
     public function kode(Request $request): JsonResponse
     {
-        $kode = strtoupper(str_replace('-', '', strip_tags((string) $request->input('kode'))));
+        $rawKode = strtoupper(strip_tags((string) $request->input('kode')));
+        $hasDashInInput = str_contains($rawKode, '-');
+        $kode = str_replace('-', '', $rawKode);
         if ($kode === '') {
             return response()->json('', 204);
         }
@@ -37,30 +39,41 @@ class LegacyFrontController extends Controller
         }
 
         $tagCode = TagCode::query()
-            ->whereRaw("REPLACE(verification_code, '-', '') = ?", [$kode])
+            ->where('verification_code', $kode)
             ->first();
+
+        if (!$tagCode && $hasDashInInput) {
+            // Backward-compatibility for legacy code format that may include hyphens in DB.
+            $tagCode = TagCode::query()
+                ->whereRaw("REPLACE(verification_code, '-', '') = ?", [$kode])
+                ->first();
+        }
 
         if (!$tagCode) {
             return response()->json('', 204);
         }
 
-        $history = ScanActivity::query()
-            ->where(function ($query) use ($tagCode, $kode) {
-                $query->where('verification_code', $tagCode->verification_code)
-                    ->orWhere('scanned_code', $kode);
-            })
-            ->orderBy('scanned_at', 'asc')
-            ->get(['scanned_at']);
+        $historyQuery = ScanActivity::query()
+            ->where('verification_code', $tagCode->verification_code);
 
-        $scanCountBefore = $history->count();
+        $scanCountBefore = (clone $historyQuery)->count();
+        if ($scanCountBefore === 0) {
+            $historyQuery = ScanActivity::query()->where('scanned_code', $kode);
+            $scanCountBefore = (clone $historyQuery)->count();
+        }
+
         $scanCountAfter = $scanCountBefore + 1;
         $now = Carbon::now();
 
-        $timestamps = $history
+        $timestamps = (clone $historyQuery)
+            ->orderBy('scanned_at', 'asc')
+            ->limit(3)
             ->pluck('scanned_at')
             ->map(fn ($value) => Carbon::parse($value))
             ->values();
-        $timestamps->push($now);
+        if ($scanCountBefore < 3) {
+            $timestamps->push($now);
+        }
 
         $scanStatus = 'Original';
         if (strtolower((string) $tagCode->status) === 'suspended') {
@@ -77,7 +90,7 @@ class LegacyFrontController extends Controller
             $coordinates['longitude']
         );
 
-        ScanActivity::query()->create([
+        $scanActivity = ScanActivity::query()->create([
             'scanned_code' => $kode,
             'tag_code_id' => $tagCode->id,
             'verification_code' => $tagCode->verification_code,
@@ -94,6 +107,13 @@ class LegacyFrontController extends Controller
             'user_agent' => (string) $request->userAgent(),
             'scanned_at' => $now,
         ]);
+
+        $this->enrichLocationLabelAfterResponse(
+            (int) $scanActivity->id,
+            $coordinates['latitude'],
+            $coordinates['longitude'],
+            $geo['ip_address'] ?? $resolvedIpAddress
+        );
 
         return response()->json([
             'ke' => $scanCountBefore,
@@ -133,186 +153,57 @@ class LegacyFrontController extends Controller
 
     private function resolveLocationByCoordinates(float $latitude, float $longitude): ?array
     {
-        if ($this->skipExternalLocationLookup()) {
-            return null;
-        }
-
         $normalizedLat = (float) number_format($latitude, 6, '.', '');
         $normalizedLng = (float) number_format($longitude, 6, '.', '');
-        $cacheKey = 'legacy_reverse_geo_' . hash('sha1', "{$normalizedLat},{$normalizedLng}");
-
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached) && isset($cached['location_label'])) {
-            return $cached;
-        }
-
-        $payload = $this->fetchReverseGeocodePayload($normalizedLat, $normalizedLng);
-        if ($payload === null) {
-            return null;
-        }
-
-        $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
-        $city = trim((string) (
-            $address['city']
-            ?? $address['town']
-            ?? $address['municipality']
-            ?? $address['village']
-            ?? $address['county']
-            ?? $address['state_district']
-            ?? $address['state']
-            ?? ''
-        ));
-        $countryCode = strtoupper(trim((string) ($address['country_code'] ?? '')));
-
-        if ($city === '' && $countryCode === '') {
-            return null;
-        }
-
-        $locationLabel = $city !== '' && $countryCode !== ''
-            ? "{$city},{$countryCode}"
-            : ($city !== '' ? $city : $countryCode);
-
-        $result = [
-            'location_label' => $locationLabel,
+        return [
+            'location_label' => sprintf('Lat %.6f, Lng %.6f', $normalizedLat, $normalizedLng),
             'latitude' => $normalizedLat,
             'longitude' => $normalizedLng,
             'ip_address' => null,
         ];
-
-        Cache::put($cacheKey, $result, now()->addHours(6));
-        return $result;
     }
 
     private function resolveLocationByIp(?string $candidateIp): array
     {
-        if ($this->skipExternalLocationLookup()) {
+        $resolvedIp = $this->resolveIpCandidate($candidateIp);
+        if ($resolvedIp === null) {
             return [
                 'location_label' => 'Tidak Diketahui',
                 'latitude' => null,
                 'longitude' => null,
-                'ip_address' => $this->isPublicIp((string) $candidateIp) ? $candidateIp : null,
+                'ip_address' => null,
             ];
         }
 
-        $ipsToTry = [];
-        $trimmedIp = trim((string) ($candidateIp ?? ''));
-
-        if ($trimmedIp !== '' && $this->isPublicIp($trimmedIp)) {
-            $ipsToTry[] = $trimmedIp;
-        }
-
-        // Fallback to server public IP (ip-api self lookup) when client IP is private/local.
-        $ipsToTry[] = null;
-
-        foreach ($ipsToTry as $ip) {
-            $cacheKey = 'legacy_ip_api_geo_' . ($ip ?? 'self');
-            $cached = Cache::get($cacheKey);
-            if (is_array($cached) && isset($cached['location_label'])) {
-                return $cached;
-            }
-
-            $payload = $this->fetchIpApiPayload($ip);
-            if ($payload === null || ($payload['status'] ?? '') !== 'success') {
-                continue;
-            }
-
-            $city = trim((string) ($payload['city'] ?? ''));
-            $countryCode = strtoupper(trim((string) ($payload['countryCode'] ?? '')));
-            $locationLabel = $city !== '' && $countryCode !== ''
-                ? "{$city},{$countryCode}"
-                : ($city !== '' ? $city : ($countryCode !== '' ? $countryCode : 'Tidak Diketahui'));
-
-            $result = [
-                'location_label' => $locationLabel,
-                'latitude' => isset($payload['lat']) ? (float) $payload['lat'] : null,
-                'longitude' => isset($payload['lon']) ? (float) $payload['lon'] : null,
-                'ip_address' => $this->resolvePublicIpCandidate(
-                    trim((string) ($payload['query'] ?? '')) ?: ($ip ?? null)
-                ),
+        $shouldLookupImmediately = !$this->isPublicIp($resolvedIp);
+        $cachedGeoData = $this->resolveIpGeoData($resolvedIp, $shouldLookupImmediately);
+        if (is_array($cachedGeoData)) {
+            return [
+                'location_label' => $cachedGeoData['location_label'] ?? "IP {$resolvedIp}",
+                'latitude' => $cachedGeoData['latitude'] ?? null,
+                'longitude' => $cachedGeoData['longitude'] ?? null,
+                'ip_address' => $cachedGeoData['ip_address'] ?? $resolvedIp,
             ];
-
-            Cache::put($cacheKey, $result, now()->addHours(6));
-            return $result;
         }
 
         return [
-            'location_label' => 'Tidak Diketahui',
+            'location_label' => "IP {$resolvedIp}",
             'latitude' => null,
             'longitude' => null,
-            'ip_address' => $this->resolvePublicIpCandidate($trimmedIp),
+            'ip_address' => $resolvedIp,
         ];
-    }
-
-    private function fetchReverseGeocodePayload(float $latitude, float $longitude): ?array
-    {
-        try {
-            $response = Http::timeout(3)
-                ->acceptJson()
-                ->withHeaders([
-                    'User-Agent' => 'mki-location-resolver/1.0',
-                ])
-                ->get('https://nominatim.openstreetmap.org/reverse', [
-                    'format' => 'jsonv2',
-                    'lat' => $latitude,
-                    'lon' => $longitude,
-                    'zoom' => 10,
-                    'addressdetails' => 1,
-                ]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!$response->ok()) {
-            return null;
-        }
-
-        $payload = $response->json();
-        return is_array($payload) ? $payload : null;
-    }
-
-    private function fetchIpApiPayload(?string $ip): ?array
-    {
-        $endpoint = $ip !== null && $ip !== ''
-            ? 'http://ip-api.com/json/' . urlencode($ip)
-            : 'http://ip-api.com/json/';
-
-        try {
-            $response = Http::timeout(2)
-                ->acceptJson()
-                ->get($endpoint, [
-                    'fields' => 'status,message,query,city,countryCode,lat,lon',
-                ]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!$response->ok()) {
-            return null;
-        }
-
-        $payload = $response->json();
-        return is_array($payload) ? $payload : null;
     }
 
     private function resolveClientIpAddress(Request $request): ?string
     {
-        $requestIp = trim((string) $request->ip());
-        if ($this->isPublicIp($requestIp)) {
-            return $requestIp;
-        }
-
-        if ($this->skipExternalLocationLookup()) {
-            return null;
-        }
-
         $forwardedIp = $this->firstPublicIpFromForwardedHeaders($request);
         if ($forwardedIp !== null) {
             return $forwardedIp;
         }
 
-        $publicIpFromApi = $this->resolvePublicIpFromIpApi();
-        if ($publicIpFromApi !== null) {
-            return $publicIpFromApi;
+        $requestIp = trim((string) $request->ip());
+        if ($this->isValidIp($requestIp)) {
+            return $requestIp;
         }
 
         return null;
@@ -348,35 +239,291 @@ class LegacyFrontController extends Controller
         return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
     }
 
-    private function resolvePublicIpFromIpApi(): ?string
+    private function isValidIp(string $ip): bool
     {
-        $cachedValue = Cache::get('legacy_ip_api_public_ip_self');
-        if (is_string($cachedValue) && $this->isPublicIp($cachedValue)) {
-            return $cachedValue;
-        }
-
-        $payload = $this->fetchIpApiPayload(null);
-        if ($payload === null || ($payload['status'] ?? '') !== 'success') {
-            return null;
-        }
-
-        $resolvedQueryIp = trim((string) ($payload['query'] ?? ''));
-        if (!$this->isPublicIp($resolvedQueryIp)) {
-            return null;
-        }
-
-        Cache::put('legacy_ip_api_public_ip_self', $resolvedQueryIp, now()->addHours(6));
-        return $resolvedQueryIp;
+        return filter_var($ip, FILTER_VALIDATE_IP) !== false;
     }
 
-    private function resolvePublicIpCandidate(?string $ip): ?string
+    private function resolveIpCandidate(?string $ip): ?string
     {
         $candidate = trim((string) ($ip ?? ''));
-        if ($candidate === '' || !$this->isPublicIp($candidate)) {
+        if ($candidate === '' || !$this->isValidIp($candidate)) {
             return null;
         }
 
         return $candidate;
+    }
+
+    private function enrichLocationLabelAfterResponse(
+        int $scanActivityId,
+        ?float $latitude,
+        ?float $longitude,
+        ?string $requestIp
+    ): void {
+        $normalizedLat = $this->normalizeCoordinateValue($latitude, -90, 90);
+        $normalizedLng = $this->normalizeCoordinateValue($longitude, -180, 180);
+        $normalizedIp = $this->resolveIpCandidate($requestIp);
+        $hasCoordinateCandidate = $normalizedLat !== null && $normalizedLng !== null;
+        $hasIpCandidate = $normalizedIp !== null;
+
+        if (!$hasCoordinateCandidate && !$hasIpCandidate) {
+            return;
+        }
+
+        app()->terminating(function () use ($scanActivityId, $normalizedLat, $normalizedLng, $normalizedIp) {
+            if ($this->skipExternalLocationLookup()) {
+                return;
+            }
+
+            $scanActivity = ScanActivity::query()->find($scanActivityId);
+            if (!$scanActivity) {
+                return;
+            }
+
+            $currentLabel = trim((string) ($scanActivity->location_label ?? ''));
+            $canUpdateLabel = $this->isFallbackLocationLabel($currentLabel);
+            $needsCoordinateEnrichment = $normalizedLat === null
+                && $normalizedLng === null
+                && ($scanActivity->latitude === null || $scanActivity->longitude === null);
+
+            if (!$canUpdateLabel && !$needsCoordinateEnrichment) {
+                return;
+            }
+
+            $resolvedLabel = null;
+            $resolvedLatitude = null;
+            $resolvedLongitude = null;
+            $resolvedIpAddress = null;
+            if ($canUpdateLabel && $normalizedLat !== null && $normalizedLng !== null) {
+                $resolvedLabel = $this->resolveCityCountryFromCoordinates($normalizedLat, $normalizedLng);
+            }
+
+            if ($normalizedLat === null && $normalizedLng === null && $normalizedIp !== null && ($canUpdateLabel || $needsCoordinateEnrichment)) {
+                $resolvedGeo = $this->resolveIpGeoData($normalizedIp, true);
+                if (is_array($resolvedGeo)) {
+                    if ($canUpdateLabel) {
+                        $resolvedLabel = $resolvedGeo['location_label'] ?? null;
+                    }
+                    $resolvedLatitude = $resolvedGeo['latitude'] ?? null;
+                    $resolvedLongitude = $resolvedGeo['longitude'] ?? null;
+                    $resolvedIpAddress = $this->resolveIpCandidate($resolvedGeo['ip_address'] ?? null);
+                }
+            } elseif ($canUpdateLabel && $resolvedLabel === null && $normalizedIp !== null) {
+                $resolvedLabel = $this->resolveCityCountryFromIp($normalizedIp);
+            }
+
+            $updates = [];
+            if ($resolvedLabel !== null && $canUpdateLabel) {
+                $updates['location_label'] = $resolvedLabel;
+            }
+
+            if ($normalizedLat === null && $normalizedLng === null) {
+                if ($scanActivity->latitude === null && $resolvedLatitude !== null) {
+                    $updates['latitude'] = $resolvedLatitude;
+                }
+                if ($scanActivity->longitude === null && $resolvedLongitude !== null) {
+                    $updates['longitude'] = $resolvedLongitude;
+                }
+            }
+
+            $currentIpAddress = trim((string) ($scanActivity->ip_address ?? ''));
+            if ($resolvedIpAddress !== null && ($currentIpAddress === '' || !$this->isPublicIp($currentIpAddress))) {
+                $updates['ip_address'] = $resolvedIpAddress;
+            } elseif (($scanActivity->ip_address === null || $currentIpAddress === '') && $normalizedIp !== null) {
+                $updates['ip_address'] = $normalizedIp;
+            }
+
+            if ($updates === []) {
+                return;
+            }
+
+            $scanActivity->update($updates);
+        });
+    }
+
+    private function resolveCityCountryFromCoordinates(float $latitude, float $longitude): ?string
+    {
+        $cacheKey = 'legacy_reverse_geo_async_' . hash('sha1', "{$latitude},{$longitude}");
+        $cachedValue = Cache::get($cacheKey);
+        if (is_string($cachedValue) && $cachedValue !== '') {
+            return $cachedValue;
+        }
+
+        try {
+            $response = Http::connectTimeout(1)
+                ->timeout(2)
+                ->acceptJson()
+                ->withHeaders([
+                    'User-Agent' => 'mki-location-resolver/1.0',
+                ])
+                ->get('https://nominatim.openstreetmap.org/reverse', [
+                    'format' => 'jsonv2',
+                    'lat' => $latitude,
+                    'lon' => $longitude,
+                    'zoom' => 10,
+                    'addressdetails' => 1,
+                ]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!$response->ok()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $address = is_array($payload['address'] ?? null) ? $payload['address'] : [];
+        $city = trim((string) (
+            $address['city']
+            ?? $address['town']
+            ?? $address['municipality']
+            ?? $address['village']
+            ?? $address['county']
+            ?? $address['state_district']
+            ?? $address['state']
+            ?? ''
+        ));
+        $countryCode = strtoupper(trim((string) ($address['country_code'] ?? '')));
+        $label = $this->composeCityCountryLabel($city, $countryCode);
+
+        if ($label !== null) {
+            Cache::put($cacheKey, $label, now()->addHours(6));
+        }
+
+        return $label;
+    }
+
+    private function resolveCityCountryFromIp(string $requestIp): ?string
+    {
+        $geoData = $this->resolveIpGeoData($requestIp, true);
+        if (!is_array($geoData)) {
+            return null;
+        }
+
+        $label = trim((string) ($geoData['location_label'] ?? ''));
+        return $label !== '' ? $label : null;
+    }
+
+    private function resolveIpGeoData(string $requestIp, bool $allowNetworkLookup): ?array
+    {
+        $candidateIp = $this->resolveIpCandidate($requestIp);
+        if ($candidateIp === null) {
+            return null;
+        }
+
+        $publicCandidateIp = $this->isPublicIp($candidateIp) ? $candidateIp : null;
+        $cacheSuffix = $publicCandidateIp ?? 'self';
+        $cacheKey = 'legacy_ip_geo_payload_v3_' . $cacheSuffix;
+        $cachedValue = Cache::get($cacheKey);
+        if (is_array($cachedValue)) {
+            $cachedLabel = trim((string) ($cachedValue['location_label'] ?? ''));
+            $cachedLatitude = $this->normalizeCoordinateValue($cachedValue['latitude'] ?? null, -90, 90);
+            $cachedLongitude = $this->normalizeCoordinateValue($cachedValue['longitude'] ?? null, -180, 180);
+            $cachedIpAddress = $this->resolveIpCandidate($cachedValue['ip_address'] ?? null) ?? $publicCandidateIp ?? $candidateIp;
+            if ($cachedLabel !== '' || $cachedLatitude !== null || $cachedLongitude !== null) {
+                return [
+                    'location_label' => $cachedLabel !== '' ? $cachedLabel : null,
+                    'latitude' => $cachedLatitude,
+                    'longitude' => $cachedLongitude,
+                    'ip_address' => $cachedIpAddress,
+                ];
+            }
+        }
+
+        if (!$allowNetworkLookup) {
+            return null;
+        }
+
+        $payload = $this->fetchIpGeoPayload($publicCandidateIp);
+        $isPayloadValid = is_array($payload) && ($payload['status'] ?? '') === 'success';
+        if (!$isPayloadValid) {
+            $payload = $this->fetchIpGeoPayload(null);
+            $isPayloadValid = is_array($payload) && ($payload['status'] ?? '') === 'success';
+        }
+
+        if (!$isPayloadValid || !is_array($payload)) {
+            return null;
+        }
+
+        $city = trim((string) ($payload['city'] ?? $payload['regionName'] ?? ''));
+        $countryCode = strtoupper(trim((string) ($payload['countryCode'] ?? '')));
+        $resolvedLabel = $this->composeCityCountryLabel($city, $countryCode);
+        $resolvedLatitude = $this->normalizeCoordinateValue($payload['lat'] ?? null, -90, 90);
+        $resolvedLongitude = $this->normalizeCoordinateValue($payload['lon'] ?? null, -180, 180);
+        $resolvedIpAddress = $this->resolveIpCandidate($payload['query'] ?? null) ?? $publicCandidateIp ?? $candidateIp;
+
+        if ($resolvedLabel === null && $resolvedLatitude === null && $resolvedLongitude === null) {
+            return null;
+        }
+
+        $resolvedPayload = [
+            'location_label' => $resolvedLabel,
+            'latitude' => $resolvedLatitude,
+            'longitude' => $resolvedLongitude,
+            'ip_address' => $resolvedIpAddress,
+        ];
+        Cache::put($cacheKey, $resolvedPayload, now()->addHours(6));
+        if ($resolvedIpAddress !== null) {
+            Cache::put('legacy_ip_geo_payload_v3_' . $resolvedIpAddress, $resolvedPayload, now()->addHours(6));
+        }
+
+        return $resolvedPayload;
+    }
+
+    private function fetchIpGeoPayload(?string $targetIp): ?array
+    {
+        $endpoint = $targetIp !== null
+            ? 'http://ip-api.com/json/' . urlencode($targetIp)
+            : 'http://ip-api.com/json/';
+
+        try {
+            $response = Http::connectTimeout(1)
+                ->timeout(2)
+                ->acceptJson()
+                ->get($endpoint, [
+                    'fields' => 'status,message,query,city,regionName,countryCode,lat,lon',
+                ]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!$response->ok()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        return is_array($payload) ? $payload : null;
+    }
+
+    private function composeCityCountryLabel(string $city, string $countryCode): ?string
+    {
+        if ($city !== '' && $countryCode !== '') {
+            return "{$city},{$countryCode}";
+        }
+
+        if ($city !== '') {
+            return $city;
+        }
+
+        if ($countryCode !== '') {
+            return $countryCode;
+        }
+
+        return null;
+    }
+
+    private function isFallbackLocationLabel(string $label): bool
+    {
+        $normalized = strtolower(trim($label));
+        if ($normalized === '' || $normalized === 'tidak diketahui' || str_starts_with($normalized, 'ip ')) {
+            return true;
+        }
+
+        return str_starts_with($normalized, 'lat ');
     }
 
     private function extractCoordinatesFromRequest(Request $request): array
@@ -415,6 +562,20 @@ class LegacyFrontController extends Controller
         return (float) number_format($coordinate, 6, '.', '');
     }
 
+    private function normalizeCoordinateValue(mixed $value, float $min, float $max): ?float
+    {
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        $coordinate = (float) $value;
+        if ($coordinate < $min || $coordinate > $max) {
+            return null;
+        }
+
+        return (float) number_format($coordinate, 6, '.', '');
+    }
+
     private function isGpsRequired(): bool
     {
         if (!Schema::hasTable('app_settings')) {
@@ -437,4 +598,5 @@ class LegacyFrontController extends Controller
     {
         return app()->environment(['testing']);
     }
+
 }

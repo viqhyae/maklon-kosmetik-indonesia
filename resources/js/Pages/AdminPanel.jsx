@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, startTransition } from 'react';
+import { flushSync } from 'react-dom';
 import {
     Building2,
     Search,
@@ -52,6 +53,7 @@ export default function AdminPanel({
     // --- STATE ALERT & MODAL KONFIRMASI (GLOBAL) ---
     const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' });
     const [confirmObj, setConfirmObj] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+    const toastTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -59,8 +61,19 @@ export default function AdminPanel({
     }, [isDarkMode]);
 
     const showToast = (message, type = 'success') => {
-        setToast({ isOpen: true, message, type });
-        setTimeout(() => setToast(prev => ({ ...prev, isOpen: false })), 3000);
+        if (toastTimeoutRef.current) {
+            clearTimeout(toastTimeoutRef.current);
+            toastTimeoutRef.current = null;
+        }
+
+        flushSync(() => {
+            setToast({ isOpen: true, message, type });
+        });
+
+        toastTimeoutRef.current = setTimeout(() => {
+            setToast((prev) => ({ ...prev, isOpen: false }));
+            toastTimeoutRef.current = null;
+        }, 3000);
     };
 
     // --- STATE MODAL UTAMA ---
@@ -649,6 +662,8 @@ export default function AdminPanel({
     const [productImagePreview, setProductImagePreview] = useState(null);
     const [editingProductId, setEditingProductId] = useState(null);
     const [isSavingProduct, setIsSavingProduct] = useState(false);
+    const [pendingBrandActionIds, setPendingBrandActionIds] = useState([]);
+    const [pendingProductActionIds, setPendingProductActionIds] = useState([]);
 
     const [selectedCatL1, setSelectedCatL1] = useState(null);
     const [selectedCatL2, setSelectedCatL2] = useState(null);
@@ -703,6 +718,16 @@ export default function AdminPanel({
             setBrands(updater);
         });
     };
+    const transitionSetProducts = (updater) => {
+        startTransition(() => {
+            setProducts(updater);
+        });
+    };
+    const transitionSetBatches = (updater) => {
+        startTransition(() => {
+            setBatches(updater);
+        });
+    };
     const transitionSetUsers = (updater) => {
         startTransition(() => {
             setSystemUsers(updater);
@@ -740,6 +765,40 @@ export default function AdminPanel({
     };
 
     const isUserPendingAction = (userId) => pendingUserActionIds.includes(normalizeComparableId(userId));
+    const setBrandPendingAction = (brandId, isPending) => {
+        const key = normalizeComparableId(brandId);
+
+        setPendingBrandActionIds((currentIds) => {
+            const alreadyPending = currentIds.includes(key);
+            if (isPending) {
+                return alreadyPending ? currentIds : [...currentIds, key];
+            }
+
+            if (!alreadyPending) {
+                return currentIds;
+            }
+
+            return currentIds.filter((id) => id !== key);
+        });
+    };
+    const isBrandPendingAction = (brandId) => pendingBrandActionIds.includes(normalizeComparableId(brandId));
+    const setProductPendingAction = (productId, isPending) => {
+        const key = normalizeComparableId(productId);
+
+        setPendingProductActionIds((currentIds) => {
+            const alreadyPending = currentIds.includes(key);
+            if (isPending) {
+                return alreadyPending ? currentIds : [...currentIds, key];
+            }
+
+            if (!alreadyPending) {
+                return currentIds;
+            }
+
+            return currentIds.filter((id) => id !== key);
+        });
+    };
+    const isProductPendingAction = (productId) => pendingProductActionIds.includes(normalizeComparableId(productId));
     const setBatchPendingAction = (batchId, isPending) => {
         const key = normalizeComparableId(batchId);
 
@@ -759,11 +818,11 @@ export default function AdminPanel({
     const isBatchPendingAction = (batchId) => pendingBatchActionIds.includes(normalizeComparableId(batchId));
 
     useEffect(() => {
-        setBatches((databaseTagBatches || []).map(normalizeBatchRecord));
+        transitionSetBatches((databaseTagBatches || []).map(normalizeBatchRecord));
     }, [databaseTagBatches]);
 
     useEffect(() => {
-        setProducts((databaseProducts || []).map(normalizeProductRecord));
+        transitionSetProducts((databaseProducts || []).map(normalizeProductRecord));
     }, [databaseProducts]);
 
     useEffect(() => {
@@ -899,6 +958,10 @@ export default function AdminPanel({
         return () => {
             releaseLogoPreviewObjectUrl();
             releaseProductImagePreviewObjectUrl();
+            if (toastTimeoutRef.current) {
+                clearTimeout(toastTimeoutRef.current);
+                toastTimeoutRef.current = null;
+            }
         };
     }, []);
 
@@ -1016,7 +1079,8 @@ export default function AdminPanel({
             setBrandInput((currentInput) => ({ ...currentInput, status: newStatus }));
         }
 
-        axios.post(`/brands/${brand.id}/status`, { status: newStatus })
+                showToast(`Memperbarui status brand ${brand.name}...`, 'info');
+                axios.post(`/brands/${brand.id}/status`, { status: newStatus })
             .then((response) => {
                 const savedBrand = normalizeBrandRecord(response?.data?.brand || { ...brand, status: newStatus });
 
@@ -1165,16 +1229,35 @@ export default function AdminPanel({
     };
 
     const handleDeleteBrand = (id) => {
+        if (isBrandPendingAction(id)) {
+            return;
+        }
+
         setConfirmObj({
             isOpen: true,
             title: "Hapus Brand?",
             message: "Data brand ini akan dihapus permanen. Produk yang terkait mungkin akan kehilangan referensi. Lanjutkan?",
             onConfirm: () => {
+                if (isBrandPendingAction(id)) {
+                    return;
+                }
+
+                const previousBrandsSnapshot = brands;
+                const shouldOptimisticRemove = Number(editingBrandId || 0) !== Number(id);
+
+                setBrandPendingAction(id, true);
+                if (shouldOptimisticRemove) {
+                    transitionSetBrands((currentBrands) =>
+                        currentBrands.filter((currentBrand) => Number(currentBrand.id) !== Number(id))
+                    );
+                }
+
+                showToast("Menghapus brand...", 'info');
                 axios.delete(`/brands/${id}`)
                     .then((response) => {
                         const deletedId = Number(response?.data?.deleted_id || id);
 
-                        setBrands((currentBrands) =>
+                        transitionSetBrands((currentBrands) =>
                             currentBrands.filter((currentBrand) => Number(currentBrand.id) !== deletedId)
                         );
 
@@ -1185,8 +1268,15 @@ export default function AdminPanel({
                         showToast("Brand berhasil dihapus!");
                     })
                     .catch((error) => {
+                        if (shouldOptimisticRemove) {
+                            transitionSetBrands(previousBrandsSnapshot);
+                        }
+
                         const errors = error?.response?.data?.errors || {};
                         showToast(getFirstErrorMessage(errors, "Gagal menghapus brand."), "error");
+                    })
+                    .finally(() => {
+                        setBrandPendingAction(id, false);
                     });
             }
         });
@@ -1336,7 +1426,7 @@ export default function AdminPanel({
                 }
 
                 if (isEditing) {
-                    setProducts((currentProducts) =>
+                    transitionSetProducts((currentProducts) =>
                         currentProducts.map((currentProduct) =>
                             Number(currentProduct.id) === savedProduct.id ? savedProduct : currentProduct
                         )
@@ -1346,7 +1436,7 @@ export default function AdminPanel({
                         currentDetail && Number(currentDetail.id) === savedProduct.id ? savedProduct : currentDetail
                     );
                 } else {
-                    setProducts((currentProducts) => [savedProduct, ...currentProducts]);
+                    transitionSetProducts((currentProducts) => [savedProduct, ...currentProducts]);
                 }
 
                 showToast(isEditing ? "SKU Produk berhasil diperbarui!" : "SKU Produk baru berhasil ditambahkan!");
@@ -1393,16 +1483,39 @@ export default function AdminPanel({
     };
 
     const handleDeleteProduct = (id) => {
+        if (isProductPendingAction(id)) {
+            return;
+        }
+
         setConfirmObj({
             isOpen: true,
             title: "Hapus SKU Produk?",
             message: "Data produk ini akan dihapus dari sistem secara permanen. Lanjutkan?",
             onConfirm: () => {
+                if (isProductPendingAction(id)) {
+                    return;
+                }
+
+                const previousProductsSnapshot = products;
+                const previousSelectedProductDetail = selectedProductDetail;
+                const shouldOptimisticRemove = Number(editingProductId || 0) !== Number(id);
+
+                setProductPendingAction(id, true);
+                if (shouldOptimisticRemove) {
+                    transitionSetProducts((currentProducts) =>
+                        currentProducts.filter((currentProduct) => Number(currentProduct.id) !== Number(id))
+                    );
+                    setSelectedProductDetail((currentDetail) =>
+                        currentDetail && Number(currentDetail.id) === Number(id) ? null : currentDetail
+                    );
+                }
+
+                showToast("Menghapus SKU produk...", 'info');
                 axios.delete(`/products/${id}`)
                     .then((response) => {
                         const deletedId = Number(response?.data?.deleted_id || id);
 
-                        setProducts((currentProducts) =>
+                        transitionSetProducts((currentProducts) =>
                             currentProducts.filter((currentProduct) => Number(currentProduct.id) !== deletedId)
                         );
 
@@ -1418,8 +1531,16 @@ export default function AdminPanel({
                         showToast("SKU Produk berhasil dihapus!");
                     })
                     .catch((error) => {
+                        if (shouldOptimisticRemove) {
+                            transitionSetProducts(previousProductsSnapshot);
+                            setSelectedProductDetail(previousSelectedProductDetail);
+                        }
+
                         const errors = error?.response?.data?.errors || {};
                         showToast(getFirstErrorMessage(errors, "Gagal menghapus SKU produk."), "error");
+                    })
+                    .finally(() => {
+                        setProductPendingAction(id, false);
                     });
             }
         });
@@ -1641,6 +1762,7 @@ export default function AdminPanel({
                     setIsUserModalOpen(false);
                 }
 
+                showToast("Menghapus akun pengguna...", 'info');
                 axios.delete(`/users/${id}`)
                     .then((response) => {
                         const deletedId = Number(response?.data?.deleted_id || id);
@@ -1691,6 +1813,7 @@ export default function AdminPanel({
             setUserInput((currentInput) => ({ ...currentInput, status: newStatus }));
         }
 
+        showToast(`Memperbarui status pengguna ${user.name}...`, 'info');
         axios.post(`/users/${user.id}/status`, { status: newStatus })
             .then((response) => {
                 const savedUser = normalizeUserRecord(response?.data?.user || { ...user, status: newStatus });
@@ -1795,6 +1918,7 @@ export default function AdminPanel({
         tagSubmitLockRef.current = true;
         setIsSavingBatch(true);
 
+        showToast("Membuat batch tag...", 'info');
         axios.post('/tag-batches', {
             product_name: product.name,
             brand_name: product.brandName || relatedBrand?.name || '',
@@ -1808,7 +1932,7 @@ export default function AdminPanel({
                     throw new Error('TAG_BATCH_RESPONSE_MISSING_ID');
                 }
 
-                setBatches((currentBatches) => [createdBatch, ...currentBatches]);
+                transitionSetBatches((currentBatches) => [createdBatch, ...currentBatches]);
                 setGeneratedQR({
                     code: createdBatch.firstCode,
                     productName: createdBatch.productName,
@@ -1886,6 +2010,7 @@ export default function AdminPanel({
             setNewCatL3Name('');
         }
 
+        showToast("Menambahkan kategori...", 'info');
         axios.post('/product-categories', {
             name,
             parent_id: parentId,
@@ -1971,6 +2096,7 @@ export default function AdminPanel({
                     setSelectedCatL2(null);
                 }
 
+                showToast("Menghapus kategori...", 'info');
                 axios.delete(`/product-categories/${id}`)
                     .then((response) => {
                         const deletedId = Number(response?.data?.deleted_id || id);
@@ -2073,7 +2199,7 @@ export default function AdminPanel({
         isTagModalOpen,
         setIsTagModalOpen,
         normalizeBatchRecord,
-        setBatches,
+        setBatches: transitionSetBatches,
         setIsSavingBatch,
         setBatchPendingAction,
         isBatchPendingAction,
@@ -2198,7 +2324,7 @@ export default function AdminPanel({
             <Head title="Dashboard Admin MKI" />
             {/* Toast Notification */}
             {toast.isOpen && (
-                <div className={`fixed top-6 right-6 z-[500] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                <div className={`fixed top-6 right-6 z-[500] flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-medium animate-in slide-in-from-right-8 fade-in ${toast.type === 'success' ? 'bg-emerald-600' : (toast.type === 'info' ? 'bg-sky-600' : 'bg-red-500')}`}>
                     {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
                     {toast.message}
                 </div>

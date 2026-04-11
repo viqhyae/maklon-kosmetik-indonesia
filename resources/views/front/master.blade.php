@@ -56,15 +56,15 @@
 
             var geolocationOptions = {
                 enableHighAccuracy: true,
-                timeout: 10000,
+                timeout: 4500,
                 maximumAge: 0
             };
             var geolocationFallbackOptions = {
                 enableHighAccuracy: false,
-                timeout: 6000,
+                timeout: 2000,
                 maximumAge: 60000
             };
-            var MAX_GEO_RETRY = 2;
+            var MAX_GEO_RETRY = 1;
             var MAX_ACCEPTABLE_ACCURACY_METERS = 1200;
             var requireGpsForScan = @json(isset($requireGps) ? (bool) $requireGps : false);
 
@@ -150,10 +150,6 @@
                         text: "Silakan aktifkan izin lokasi (GPS) agar verifikasi kode dapat diproses."
                     });
                 });
-            } else if (navigator.geolocation) {
-                resolveScanCoordinates().catch(function() {
-                    // Ignore geolocation errors and fallback to IP-based lookup.
-                });
             }
 
             $("#idForm").submit(function(e) {
@@ -163,7 +159,7 @@
                 var form = $(this);
                 var actionUrl = form.attr('action');
 
-                var executeVerification = function() {
+                var executeVerification = function(allowRetryWithCoordinates) {
                     $.ajax({
                         type: "POST",
                         url: actionUrl,
@@ -244,6 +240,27 @@
                             var message = (xhr && xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
                                 : "Terjadi kendala saat memeriksa kode. Silakan coba lagi.";
+                            var shouldRetryWithCoordinates = Boolean(
+                                allowRetryWithCoordinates &&
+                                xhr &&
+                                xhr.status === 422 &&
+                                /izin lokasi wajib/i.test(String(message || '')) &&
+                                !hasScanCoordinates()
+                            );
+
+                            if (shouldRetryWithCoordinates) {
+                                resolveScanCoordinates().then(function() {
+                                    executeVerification(false);
+                                }).catch(function(resolveMessage) {
+                                    Swal.fire({
+                                        icon: "warning",
+                                        title: "Izin Lokasi Diperlukan",
+                                        text: resolveMessage || "Aktifkan izin lokasi (GPS) sebelum verifikasi kode."
+                                    });
+                                });
+                                return;
+                            }
+
                             var title = (xhr && xhr.status === 422) ? "Izin Lokasi Diperlukan" : "GAGAL";
                             var icon = (xhr && xhr.status === 422) ? "warning" : "error";
 
@@ -258,7 +275,7 @@
 
                 if (requireGpsForScan && !hasScanCoordinates()) {
                     resolveScanCoordinates().then(function() {
-                        executeVerification();
+                        executeVerification(false);
                     }).catch(function(message) {
                         Swal.fire({
                             icon: "warning",
@@ -269,7 +286,7 @@
                     return;
                 }
 
-                executeVerification();
+                executeVerification(!requireGpsForScan);
             });
         </script>
     </body>

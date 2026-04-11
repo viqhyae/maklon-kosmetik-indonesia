@@ -57,6 +57,33 @@ const formatCityFromLocation = (locationValue) => {
         .trim();
 };
 
+const looksLikeCoordinateLabel = (value) => (
+    /(^|\s)(lat|lng|longitude)\b/i.test(String(value || '')) ||
+    /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/.test(String(value || '').trim())
+);
+
+const buildLocationGroup = (locationValue, latitude, longitude) => {
+    const cityName = formatCityFromLocation(locationValue);
+    if (cityName && !looksLikeCoordinateLabel(cityName)) {
+        return {
+            key: `city:${cityName.toLowerCase()}`,
+            label: cityName,
+        };
+    }
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        // Group by ~11km grid to keep map rendering stable for high-volume coordinate labels.
+        const latBucket = Math.round(latitude * 10) / 10;
+        const lngBucket = Math.round(longitude * 10) / 10;
+        return {
+            key: `grid:${latBucket}:${lngBucket}`,
+            label: `Area ${latBucket.toFixed(1)}, ${lngBucket.toFixed(1)}`,
+        };
+    }
+
+    return null;
+};
+
 export default function createDashboard(context) {
     const {
         brands,
@@ -137,10 +164,11 @@ export default function createDashboard(context) {
                 const longitude = toSafeNumber(scanLog?.longitude);
                 if (latitude === null || longitude === null) return;
 
-                const cityName = formatCityFromLocation(scanLog?.location);
-                if (!cityName) return;
+                const locationGroup = buildLocationGroup(scanLog?.location, latitude, longitude);
+                if (!locationGroup) return;
+                const cityName = locationGroup.label;
 
-                const existing = cityMap.get(cityName) || {
+                const existing = cityMap.get(locationGroup.key) || {
                     city: cityName,
                     latitudeSum: 0,
                     longitudeSum: 0,
@@ -157,7 +185,7 @@ export default function createDashboard(context) {
                 if (normalizedStatus === 'Suspended') existing.suspendedCount += 1;
                 if (normalizedStatus === 'Peringatan') existing.warningCount += 1;
 
-                cityMap.set(cityName, existing);
+                cityMap.set(locationGroup.key, existing);
             });
 
             return Array.from(cityMap.values())

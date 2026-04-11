@@ -86,7 +86,7 @@ class UserManagementController extends Controller
         $this->syncBrandsFromUserMutation($oldName, $newName, $oldRole, $newRole);
 
         return response()->json([
-            'user' => $this->userPayload($user->fresh()),
+            'user' => $this->userPayload($user),
         ]);
     }
 
@@ -120,7 +120,7 @@ class UserManagementController extends Controller
         ]);
 
         return response()->json([
-            'user' => $this->userPayload($user->fresh()),
+            'user' => $this->userPayload($user),
         ]);
     }
 
@@ -168,7 +168,7 @@ class UserManagementController extends Controller
         ]);
 
         return response()->json([
-            'user' => $this->userPayload($user->fresh()),
+            'user' => $this->userPayload($user),
         ]);
     }
 

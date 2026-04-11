@@ -298,7 +298,7 @@ class BrandController extends Controller {
         $brand->update($data);
 
         return response()->json([
-            'brand' => $this->brandPayload($brand->fresh()),
+            'brand' => $this->brandPayload($brand),
         ]);
     }
 
@@ -315,7 +315,7 @@ class BrandController extends Controller {
         ]);
 
         return response()->json([
-            'brand' => $this->brandPayload($brand->fresh()),
+            'brand' => $this->brandPayload($brand),
         ]);
     }
 

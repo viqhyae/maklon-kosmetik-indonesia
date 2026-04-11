@@ -138,7 +138,7 @@ class TagBatchController extends Controller
         });
 
         return response()->json([
-            'batch' => $this->batchPayload($tagBatch->fresh()),
+            'batch' => $this->batchPayload($tagBatch),
         ]);
     }
 

@@ -79,6 +79,7 @@ export default function createTagGenerator(context) {
                     setBatches((currentBatches) =>
                         currentBatches.filter((batch) => !isSameEntityId(batch.id, batchId))
                     );
+                    showToast(`Menghapus batch ${batchId}...`, 'info');
 
                     axios.delete(`/tag-batches/${batchId}`)
                         .then(() => {
@@ -115,6 +116,7 @@ export default function createTagGenerator(context) {
                         : batch
                 )
             );
+            showToast(`Memperbarui status batch ${batchId}...`, 'info');
 
             axios.post(`/tag-batches/${batchId}/status`, {
                 status: nextStatus,
