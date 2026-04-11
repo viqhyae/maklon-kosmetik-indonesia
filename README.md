@@ -19,6 +19,17 @@ Fungsi utama:
 - Manajemen user & role (`Super Admin`, `Brand Owner`)
 - Pengaturan keamanan (`max_valid_scan_limit`, `require_gps`)
 
+## 1. Flowchart Alur Sistem
+
+Flowchart alur website:
+
+![Flowchart Alur Website MKI](flowchart-alur-website-mki.png)
+
+Referensi:
+
+- Versi dokumentasi: `docs/flowchart-alur-website-mki.md`
+- Versi PlantUML: `docs/flowchart-alur-website-mki.puml`
+
 ## 2. Stack Teknologi
 
 Backend:
