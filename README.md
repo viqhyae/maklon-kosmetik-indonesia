@@ -1,8 +1,6 @@
-# MKI Dashboard
+# Maklon Kosmetik Indonesia
 
 Dokumentasi resmi untuk operasional dan maintenance website verifikasi keaslian produk MKI.
-
-## 1. Website Ini Apa?
 
 Project ini adalah **website verifikasi keaslian produk** dengan 2 area utama:
 
