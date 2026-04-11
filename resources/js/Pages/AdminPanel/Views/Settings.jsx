@@ -164,7 +164,7 @@ export default function createSettings(context) {
                 <PageAlert text="Pengaturan sistem global. Hanya Super Admin yang dapat mengubah beberapa konfigurasi krusial keamanan." />
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 w-full">
                     <h3 className="font-semibold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-3">
-                        <Lock size={18} className="text-[#C1986E]" /> Konfigurasi Keamanan (Anti-Counterfeit)
+                        <Lock size={18} className="text-[#C1986E]" /> Konfigurasi Keamanan
                     </h3>
                     <div className="space-y-5">
                         <div className="flex items-center justify-between">
