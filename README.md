@@ -25,11 +25,6 @@ Flowchart alur website:
 
 ![Flowchart Alur Website MKI](flowchart-alur-website-mki.png)
 
-Referensi:
-
-- Versi dokumentasi: `docs/flowchart-alur-website-mki.md`
-- Versi PlantUML: `docs/flowchart-alur-website-mki.puml`
-
 ## 2. Stack Teknologi
 
 Backend:
