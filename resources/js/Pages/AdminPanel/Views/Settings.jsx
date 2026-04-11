@@ -13,7 +13,6 @@ export default function createSettings(context) {
         accountEmailInput,
         accountPasswordInput,
         authUser,
-        emailNotif,
         handleSaveSecuritySettings,
         handleSaveAccountEmail,
         handleSaveAccountPassword,
@@ -27,7 +26,6 @@ export default function createSettings(context) {
         setActiveTab,
         setAccountEmailInput,
         setAccountPasswordInput,
-        setEmailNotif,
         setRequireGps,
         setScanValidLimit,
         ToggleSwitch,
@@ -190,16 +188,6 @@ export default function createSettings(context) {
                             <ToggleSwitch
                                 checked={requireGps}
                                 onChange={() => setRequireGps(!requireGps)}
-                            />
-                        </div>
-                        <div className="flex items-center justify-between border-t border-slate-100 pt-5">
-                            <div>
-                                <h4 className="text-sm font-semibold text-slate-800">Notifikasi Email Peringatan Pemalsuan</h4>
-                                <p className="text-xs text-slate-500 mt-0.5">Kirim notifikasi otomatis ke Brand Owner bila ada terdeteksi tag invalid.</p>
-                            </div>
-                            <ToggleSwitch
-                                checked={emailNotif}
-                                onChange={() => setEmailNotif(!emailNotif)}
                             />
                         </div>
                     </div>

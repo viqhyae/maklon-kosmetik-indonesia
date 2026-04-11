@@ -149,7 +149,7 @@ class ProductSkuController extends Controller
             'cat_l2_id' => ['nullable', 'integer', 'exists:product_categories,id'],
             'cat_l3_id' => ['nullable', 'integer', 'exists:product_categories,id'],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:2048'],
+            'image' => ['nullable', 'image', 'max:1024'],
             'image_upload_expected' => ['nullable', 'integer', Rule::in([0, 1])],
             'dynamic_fields' => ['nullable', 'array'],
             'dynamic_fields.*' => ['nullable', 'string', 'max:1000'],

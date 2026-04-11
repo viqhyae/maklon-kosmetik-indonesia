@@ -97,7 +97,7 @@ const SearchableSingleSelect = ({
     };
 
     return (
-        <div ref={rootRef} className="relative">
+        <div ref={rootRef} className={`relative ${isOpen ? 'z-[160]' : 'z-0'}`}>
             <button
                 type="button"
                 onClick={handleToggle}
@@ -112,7 +112,7 @@ const SearchableSingleSelect = ({
             </button>
 
             {isOpen && (
-                <div className="absolute top-full mt-3 left-0 right-0 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                <div className="absolute top-full mt-3 left-0 right-0 z-[170] bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
                     <div className="p-3 border-b border-slate-100">
                         <div className="flex items-center gap-2 border border-slate-200 focus-within:border-[#C1986E] focus-within:ring-2 focus-within:ring-[#C1986E]/20 rounded-xl px-3 py-2.5 transition-all bg-white">
                             <Search size={16} className="text-slate-400 flex-shrink-0" />
@@ -128,7 +128,6 @@ const SearchableSingleSelect = ({
                                     }
                                 }}
                                 placeholder={searchPlaceholder}
-                                autoFocus
                                 className="w-full bg-transparent border-none outline-none text-sm text-slate-700 placeholder:text-slate-400 focus:ring-0 p-0"
                             />
                         </div>
@@ -262,8 +261,7 @@ const ProductForm = () => {
         PRODUCT_SPEC_SCHEMA,
         productInput,
         productImagePreview,
-        setProductImageFile,
-        setProductImagePreviewFromFile,
+        handleProductImageInputChange,
         setActiveFormSection,
         setCatSearchKeyword,
         setIsCategoryModalOpen,
@@ -579,13 +577,7 @@ const ProductForm = () => {
                                             className="hidden"
                                             accept="image/*"
                                             disabled={isSavingProduct}
-                                            onChange={(event) => {
-                                                const file = event.target.files?.[0];
-                                                if (!file) return;
-
-                                                setProductImageFile(file);
-                                                setProductImagePreviewFromFile(file);
-                                            }}
+                                            onChange={handleProductImageInputChange}
                                         />
 
                                         {productImagePreview ? (
@@ -600,7 +592,7 @@ const ProductForm = () => {
                                         )}
                                     </label>
                                     <div className="text-[10px] text-slate-400 text-center leading-relaxed">
-                                        Format: JPG, PNG, WEBP<br />Ukuran Maksimal: 2MB<br />Rasio Gambar: 1:1 (Persegi)
+                                        Format: JPG, PNG, WEBP<br />Ukuran Maksimal: 1MB<br />Rasio Gambar: 1:1 (Persegi)
                                     </div>
                                 </div>
 
@@ -715,7 +707,7 @@ const ProductForm = () => {
                                                 </button>
 
                                                 <div
-                                                    className="overflow-hidden transition-[max-height,opacity,margin-top] duration-300 ease-in-out"
+                                                    className={`${isSpecExpanded ? 'overflow-visible' : 'overflow-hidden'} transition-[max-height,opacity,margin-top] duration-300 ease-in-out`}
                                                     style={{
                                                         maxHeight: isSpecExpanded ? `${extendedSpecMaxHeight}px` : '0px',
                                                         opacity: isSpecExpanded ? 1 : 0,

@@ -75,6 +75,16 @@ export default function AdminPanel({
             toastTimeoutRef.current = null;
         }, 3000);
     };
+    const MAX_IMAGE_UPLOAD_SIZE_BYTES = 1024 * 1024;
+    const validateImageUploadSize = (file, label = 'File gambar') => {
+        if (!file) return false;
+        if (Number(file.size || 0) <= MAX_IMAGE_UPLOAD_SIZE_BYTES) {
+            return true;
+        }
+
+        showToast(`${label} maksimal 1 MB.`, 'error');
+        return false;
+    };
 
     // --- STATE MODAL UTAMA ---
     const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
@@ -712,6 +722,30 @@ export default function AdminPanel({
     const categorySubmitLockRef = useRef(false);
     const tagSubmitLockRef = useRef(false);
     const brandModalSourceRef = useRef('brand');
+    const handleBrandLogoInputChange = (event) => {
+        const file = event?.target?.files?.[0];
+        if (!file) return;
+
+        if (!validateImageUploadSize(file, 'Logo brand')) {
+            if (event?.target) event.target.value = '';
+            return;
+        }
+
+        setLogoFile(file);
+        setLogoPreviewFromFile(file);
+    };
+    const handleProductImageInputChange = (event) => {
+        const file = event?.target?.files?.[0];
+        if (!file) return;
+
+        if (!validateImageUploadSize(file, 'Gambar produk')) {
+            if (event?.target) event.target.value = '';
+            return;
+        }
+
+        setProductImageFile(file);
+        setProductImagePreviewFromFile(file);
+    };
 
     const transitionSetBrands = (updater) => {
         startTransition(() => {
@@ -2172,8 +2206,7 @@ export default function AdminPanel({
         productInput,
         setProductInput,
         productImagePreview,
-        setProductImageFile,
-        setProductImagePreviewFromFile,
+        handleProductImageInputChange,
         activeFormSection,
         setActiveFormSection,
         categories,
@@ -2477,12 +2510,7 @@ export default function AdminPanel({
                                             type="file"
                                             className="hidden"
                                             accept="image/*"
-                                            onChange={(event) => {
-                                                const file = event.target.files[0];
-                                                if (!file) return;
-                                                setLogoFile(file);
-                                                setLogoPreviewFromFile(file);
-                                            }}
+                                            onChange={handleBrandLogoInputChange}
                                         />
 
                                         {logoPreview ? (

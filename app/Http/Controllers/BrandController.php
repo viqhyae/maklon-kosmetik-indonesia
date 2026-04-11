@@ -208,7 +208,7 @@ class BrandController extends Controller {
             'brand_code' => 'required|string|unique:brands',
             'owner_name' => 'nullable|string',
             'description' => 'nullable|string',
-            'logo' => 'nullable|image|max:2048', // Maks 2MB
+            'logo' => 'nullable|image|max:1024', // Maks 1MB
             'status' => 'nullable|integer|in:0,1',
             'logo_upload_expected' => 'nullable|integer|in:0,1',
         ]);
@@ -256,7 +256,7 @@ class BrandController extends Controller {
             'name' => 'required|string|max:255',
             'owner_name' => 'nullable|string',
             'description' => 'nullable|string',
-            'logo' => 'nullable|image|max:2048',
+            'logo' => 'nullable|image|max:1024',
             'status' => 'required|integer|in:0,1',
             'logo_upload_expected' => 'nullable|integer|in:0,1',
         ]);
