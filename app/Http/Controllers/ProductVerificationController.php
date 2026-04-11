@@ -219,7 +219,7 @@ class ProductVerificationController extends Controller
             ];
         }
 
-        $shouldLookupImmediately = $allowNetworkLookup || !$this->isPublicIp($resolvedIp);
+        $shouldLookupImmediately = true;
         $ipGeoData = $this->resolveIpGeoData($resolvedIp, $shouldLookupImmediately);
         if (is_array($ipGeoData)) {
             return [

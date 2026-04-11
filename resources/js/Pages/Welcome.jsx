@@ -83,6 +83,24 @@ const resolveCoordinatesWithinBudget = () =>
         }),
     ]);
 
+const resolveGeolocationPermissionState = async () => {
+    if (
+        typeof window === 'undefined' ||
+        !window.navigator?.permissions?.query
+    ) {
+        return 'unknown';
+    }
+
+    try {
+        const permissionStatus = await window.navigator.permissions.query({
+            name: 'geolocation',
+        });
+        return String(permissionStatus?.state || 'unknown');
+    } catch {
+        return 'unknown';
+    }
+};
+
 export default function Welcome() {
     const [code, setCode] = useState('');
     const [result, setResult] = useState(null);
@@ -110,9 +128,15 @@ export default function Welcome() {
                     },
                 });
 
+            const permissionState = await resolveGeolocationPermissionState();
+            const optionalCoordinates =
+                permissionState === 'granted'
+                    ? await resolveBrowserCoordinates()
+                    : await resolveCoordinatesWithinBudget();
+
             let response;
             try {
-                response = await sendVerificationRequest();
+                response = await sendVerificationRequest(optionalCoordinates);
             } catch (initialError) {
                 const maybeLocationRequired = initialError?.response?.status === 422
                     && /izin lokasi wajib/i.test(String(initialError?.response?.data?.message || ''));
@@ -120,7 +144,7 @@ export default function Welcome() {
                     throw initialError;
                 }
 
-                const quickCoordinates = await resolveCoordinatesWithinBudget();
+                const quickCoordinates = optionalCoordinates || await resolveCoordinatesWithinBudget();
                 const finalCoordinates = quickCoordinates || await resolveBrowserCoordinates();
 
                 if (!finalCoordinates) {
@@ -300,6 +324,15 @@ export default function Welcome() {
                                 >
                                     {isChecking ? 'Memeriksa...' : 'Cek Kode'}
                                 </button>
+
+                                {isChecking && (
+                                    <div className="flex items-center gap-2 rounded-xl border border-[#eadcca] bg-[#fbf7f0] px-3 py-2 text-sm text-[#8e6e4a]">
+                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#c2986b] border-t-transparent" />
+                                        <span className="font-medium">
+                                            Sedang memproses verifikasi, mohon tunggu...
+                                        </span>
+                                    </div>
+                                )}
                             </form>
 
                             {errorMessage !== '' && (

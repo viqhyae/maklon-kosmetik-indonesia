@@ -66,7 +66,53 @@
             };
             var MAX_GEO_RETRY = 1;
             var MAX_ACCEPTABLE_ACCURACY_METERS = 1200;
-            var requireGpsForScan = @json(isset($requireGps) ? (bool) $requireGps : false);
+            var OPTIONAL_GEO_SUBMIT_BUDGET_MS = 250;
+            var requireGpsForScan = Boolean(Number('{{ isset($requireGps) && $requireGps ? 1 : 0 }}'));
+            var submitButton = $("#button-addon2");
+            var defaultSubmitLabel = submitButton.length ? String(submitButton.text() || 'CEK') : 'CEK';
+            var loadingModalVisible = false;
+
+            var setSubmitLoading = function(isLoading) {
+                if (!submitButton.length) {
+                    return;
+                }
+
+                submitButton.prop('disabled', Boolean(isLoading));
+                submitButton.text(isLoading ? 'MEMPROSES...' : defaultSubmitLabel);
+            };
+
+            var showVerificationLoading = function(message) {
+                var loadingText = message || "Mohon tunggu, data verifikasi sedang diproses.";
+                if (loadingModalVisible) {
+                    Swal.update({
+                        text: loadingText
+                    });
+                    return;
+                }
+
+                loadingModalVisible = true;
+                Swal.fire({
+                    title: "Memproses Verifikasi",
+                    text: loadingText,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: function() {
+                        Swal.showLoading();
+                    }
+                });
+            };
+
+            var closeVerificationLoading = function() {
+                if (!loadingModalVisible) {
+                    return;
+                }
+
+                loadingModalVisible = false;
+                if (Swal.isVisible()) {
+                    Swal.close();
+                }
+            };
 
             var setScanCoordinates = function(latitude, longitude) {
                 $("#scan-latitude").val(latitude);
@@ -83,6 +129,20 @@
                 return new Promise(function(resolve, reject) {
                     navigator.geolocation.getCurrentPosition(resolve, reject, options);
                 });
+            };
+
+            var resolveGeolocationPermissionState = function() {
+                if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+                    return Promise.resolve('unknown');
+                }
+
+                return navigator.permissions.query({ name: 'geolocation' })
+                    .then(function(permissionStatus) {
+                        return String(permissionStatus && permissionStatus.state ? permissionStatus.state : 'unknown');
+                    })
+                    .catch(function() {
+                        return 'unknown';
+                    });
             };
 
             var resolveScanCoordinates = function() {
@@ -142,6 +202,31 @@
                 });
             };
 
+            var resolveOptionalCoordinates = function() {
+                if (hasScanCoordinates()) {
+                    return Promise.resolve();
+                }
+
+                return resolveGeolocationPermissionState().then(function(permissionState) {
+                    if (permissionState === 'granted') {
+                        return resolveScanCoordinates()
+                            .then(function() { return null; })
+                            .catch(function() { return null; });
+                    }
+
+                    return Promise.race([
+                        resolveScanCoordinates()
+                            .then(function() { return null; })
+                            .catch(function() { return null; }),
+                        new Promise(function(resolve) {
+                            setTimeout(function() {
+                                resolve(null);
+                            }, OPTIONAL_GEO_SUBMIT_BUDGET_MS);
+                        })
+                    ]);
+                });
+            };
+
             if (requireGpsForScan) {
                 resolveScanCoordinates().catch(function() {
                     Swal.fire({
@@ -164,7 +249,14 @@
                         type: "POST",
                         url: actionUrl,
                         data: form.serialize(), // serializes the form's elements.
+                        beforeSend: function() {
+                            setSubmitLoading(true);
+                            showVerificationLoading("Sedang memeriksa kode produk...");
+                        },
                         success: function(xml, textStatus, xhr){
+                            closeVerificationLoading();
+                            setSubmitLoading(false);
+
                             if(xhr.status == 200){
                                 if(xml.ke == 0){
                                     Swal.fire({
@@ -237,6 +329,8 @@
                             }
                         },
                         error: function(xhr) {
+                            closeVerificationLoading();
+
                             var message = (xhr && xhr.responseJSON && xhr.responseJSON.message)
                                 ? xhr.responseJSON.message
                                 : "Terjadi kendala saat memeriksa kode. Silakan coba lagi.";
@@ -249,9 +343,14 @@
                             );
 
                             if (shouldRetryWithCoordinates) {
+                                setSubmitLoading(true);
+                                showVerificationLoading("Mengambil lokasi perangkat...");
                                 resolveScanCoordinates().then(function() {
+                                    closeVerificationLoading();
                                     executeVerification(false);
                                 }).catch(function(resolveMessage) {
+                                    closeVerificationLoading();
+                                    setSubmitLoading(false);
                                     Swal.fire({
                                         icon: "warning",
                                         title: "Izin Lokasi Diperlukan",
@@ -263,6 +362,7 @@
 
                             var title = (xhr && xhr.status === 422) ? "Izin Lokasi Diperlukan" : "GAGAL";
                             var icon = (xhr && xhr.status === 422) ? "warning" : "error";
+                            setSubmitLoading(false);
 
                             Swal.fire({
                                 icon: icon,
@@ -274,15 +374,33 @@
                 };
 
                 if (requireGpsForScan && !hasScanCoordinates()) {
+                    setSubmitLoading(true);
+                    showVerificationLoading();
                     resolveScanCoordinates().then(function() {
+                        closeVerificationLoading();
                         executeVerification(false);
                     }).catch(function(message) {
+                        closeVerificationLoading();
+                        setSubmitLoading(false);
                         Swal.fire({
                             icon: "warning",
                             title: "Izin Lokasi Diperlukan",
                             text: message || "Aktifkan izin lokasi (GPS) sebelum verifikasi kode."
                         });
                     });
+                    return;
+                }
+
+                if (!requireGpsForScan && !hasScanCoordinates()) {
+                    setSubmitLoading(true);
+                    showVerificationLoading();
+                    resolveOptionalCoordinates()
+                        .then(function() {
+                            executeVerification(true);
+                        })
+                        .catch(function() {
+                            executeVerification(true);
+                        });
                     return;
                 }
 

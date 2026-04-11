@@ -175,7 +175,7 @@ class LegacyFrontController extends Controller
             ];
         }
 
-        $shouldLookupImmediately = !$this->isPublicIp($resolvedIp);
+        $shouldLookupImmediately = true;
         $cachedGeoData = $this->resolveIpGeoData($resolvedIp, $shouldLookupImmediately);
         if (is_array($cachedGeoData)) {
             return [
