@@ -1,71 +1,92 @@
 # MKI Dashboard
 
-Dokumentasi ini disusun untuk kebutuhan instalasi, operasional, dan maintenance project `mki` agar onboarding developer dan handover tim lebih mudah.
+Dokumentasi resmi untuk operasional dan maintenance website verifikasi keaslian produk MKI.
 
-## Ringkasan
+## 1. Website Ini Apa?
 
-MKI Dashboard adalah panel admin berbasis Laravel + Inertia React untuk:
+Project ini adalah **website verifikasi keaslian produk** dengan 2 area utama:
 
-- Manajemen master data brand, kategori, dan SKU produk
-- Generate batch Tag/QR
-- Monitoring aktivitas scan produk
-- Manajemen user dan role (`Super Admin`, `Brand Owner`)
-- Pengaturan keamanan aplikasi
+- **Halaman publik (`/`)** untuk cek kode produk oleh customer
+- **Dashboard admin (`/adminmki`)** untuk operasional internal
 
-## Stack
+Fungsi utama:
 
-- PHP 8.2+ (composer requirement)
-- Laravel 12
-- React 18 + Inertia.js
-- Vite
-- MySQL 8 (untuk setup Docker)
-- Docker Compose (opsional)
+- Validasi kode produk (asli/peringatan/suspended/invalid)
+- Pencatatan aktivitas scan (waktu, status, lokasi, IP, lat/lng)
+- Manajemen master data:
+  - Brand
+  - Kategori produk (3 level)
+  - SKU produk + spesifikasi dinamis
+- Generate batch tag / QR
+- Manajemen user & role (`Super Admin`, `Brand Owner`)
+- Pengaturan keamanan (`max_valid_scan_limit`, `require_gps`)
 
-## URL Penting
+## 2. Stack Teknologi
 
-- Public homepage: `/`
-- Login: `/login`
-- Dashboard admin: `/adminmki`
-- Verifikasi produk publik: `/verify-product-code`
+Backend:
 
-## Prasyarat
+- PHP `^8.2`
+- Laravel `^12`
+- Inertia Laravel `^2.0`
+- MySQL 8
 
-Pastikan tools ini sudah terpasang:
+Frontend:
+
+- React `^18`
+- Inertia React `^2.0`
+- Vite `^7`
+- TailwindCSS
+- Axios
+- Lucide React
+
+Infra:
+
+- Docker + Docker Compose (opsional, direkomendasikan untuk onboarding cepat)
+- Service compose: `app`, `mysql`, `phpmyadmin`
+
+## 3. Kebutuhan Sistem
+
+## Kebutuhan software (tanpa Docker)
 
 - Git
+- PHP 8.2+
 - Composer
 - Node.js + npm
-- PHP 8.2+
-- MySQL/MariaDB (jika tanpa Docker)
-- Docker Desktop + Docker Compose (jika pakai Docker)
+- MySQL/MariaDB
 
-## Instalasi Lokal (Tanpa Docker)
+## Kebutuhan software (dengan Docker)
 
-1. Clone repository dari GitHub.
+- Git
+- Docker Desktop
+- Docker Compose
+- Node.js + npm (untuk build asset frontend di host)
+
+## Rekomendasi resource minimum
+
+- Development: 2 vCPU, 4 GB RAM, 10 GB storage
+- Production kecil-menengah: 4 vCPU, 8 GB RAM, SSD + backup terjadwal
+
+## 4. Instalasi (Tanpa Docker)
 
 ```bash
 git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
-```
-
-2. Install dependency backend dan frontend.
-
-```bash
 composer install
 npm install
-```
-
-3. Buat file environment.
-
-```bash
 cp .env.example .env
-# PowerShell:
-# Copy-Item .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan storage:link
+composer run dev
 ```
 
-4. Konfigurasi `.env` (minimal `APP_URL`, `DB_*`).
+Catatan Windows PowerShell:
 
-Contoh MySQL lokal:
+```powershell
+Copy-Item .env.example .env
+```
+
+Minimal `.env`:
 
 ```env
 APP_URL=http://127.0.0.1:8000
@@ -77,199 +98,95 @@ DB_USERNAME=root
 DB_PASSWORD=
 ```
 
-5. Generate key, migrate database, dan link storage.
-
-```bash
-php artisan key:generate
-php artisan migrate
-php artisan storage:link
-```
-
-6. Jalankan mode development.
-
-```bash
-composer run dev
-```
-
-`composer run dev` akan menjalankan:
+`composer run dev` menjalankan:
 
 - Laravel server
 - Queue listener
-- Log tail (`pail`)
+- Laravel log tail (`pail`)
 - Vite dev server
 
-## Instalasi dengan Docker
-
-`docker-compose.yml` pada project ini memakai service:
-
-- `app` (Laravel/PHP)
-- `mysql`
-- `phpmyadmin`
-
-1. Clone dan masuk ke folder project.
+## 5. Instalasi (Docker)
 
 ```bash
 git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
-```
-
-2. Buat `.env`, lalu pastikan konfigurasi DB untuk container MySQL.
-
-```bash
 cp .env.example .env
-```
-
-Contoh nilai penting di `.env`:
-
-```env
-APP_PORT=8000
-APP_URL=http://localhost:8000
-DB_CONNECTION=mysql
-DB_HOST=mysql
-DB_PORT=3306
-DB_DATABASE=laravel
-DB_USERNAME=laravel
-DB_PASSWORD=secret
-MYSQL_ROOT_PASSWORD=root
-FORWARD_DB_PORT=3307
-PHPMYADMIN_PORT=8080
-```
-
-3. Jalankan container.
-
-```bash
 docker compose up -d --build
-```
-
-4. Install dependency PHP dan setup Laravel di container.
-
-```bash
 docker compose exec -T app composer install
 docker compose exec -T app php artisan key:generate
 docker compose exec -T app php artisan migrate
 docker compose exec -T app php artisan storage:link
-```
-
-5. Install/build asset frontend dari host (karena image `app` tidak membawa Node.js).
-
-```bash
 npm install
 npm run dev
-# atau untuk production:
-# npm run build
 ```
 
-URL default:
+Default endpoint:
 
 - App: `http://localhost:8000`
 - phpMyAdmin: `http://localhost:8080`
 - MySQL host port: `3307`
 
-## Akun Awal dan Login
+## 6. Akun Awal
 
-Catatan penting:
-
-- Route register publik dinonaktifkan
-- `DatabaseSeeder` default kosong (tidak membuat akun dummy)
-- Dashboard `/adminmki` memakai middleware `auth` + `verified`
-
-Jika belum ada user admin, buat manual via tinker:
+Register publik nonaktif. Jika belum ada admin, buat manual:
 
 ```bash
 php artisan tinker --execute="\App\Models\User::query()->forceCreate(['name'=>'Super Admin','email'=>'admin@example.com','email_verified_at'=>now(),'password'=>'Admin12345!','role'=>'Super Admin','status'=>1]);"
 ```
 
-Setelah itu login ke `/login`.
+Lalu login di `/login`.
 
-## Workflow GitHub untuk Maintenance
+## 7. SOP Maintenance
 
-### Clone pertama kali
+## Harian
 
-```bash
-git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
-cd mki
-```
+1. Cek status service:
+   - Lokal: `php artisan about`
+   - Docker: `docker compose ps`
+2. Cek error log:
+   - `tail -f storage/logs/laravel.log`
+3. Pantau scan activity dan respons halaman publik.
 
-### Update branch lokal dari `main`
+## Mingguan
 
-```bash
-git checkout main
-git pull origin main
-```
+1. Backup database.
+2. Verifikasi restore backup pada environment test/staging.
+3. Cek ukuran storage (`storage/logs`, `storage/app/public`).
+4. Jalankan `php artisan optimize:clear` bila ada gejala cache stale.
 
-### Buat branch kerja
+## Bulanan
 
-```bash
-git checkout -b chore/<nama-perubahan>
-```
+1. Update dependency keamanan (Composer/NPM) bertahap.
+2. Audit akun admin aktif dan role.
+3. Review performa query scan / dashboard.
 
-### Commit dan push
+## Backup & Restore
 
-```bash
-git add .
-git commit -m "chore: <deskripsi perubahan>"
-git push -u origin chore/<nama-perubahan>
-```
-
-### Setelah itu
-
-- Buat Pull Request ke `main`
-- Minta review
-- Merge setelah lulus review dan verifikasi
-
-## SOP Maintenance Rutin
-
-### 1) Cek kondisi service
-
-Tanpa Docker:
-
-```bash
-php artisan about
-```
-
-Dengan Docker:
-
-```bash
-docker compose ps
-```
-
-### 2) Cek log aplikasi
-
-```bash
-tail -f storage/logs/laravel.log
-# PowerShell:
-# Get-Content storage\logs\laravel.log -Wait
-```
-
-### 3) Backup database
-
-MySQL lokal:
+Backup (MySQL lokal):
 
 ```bash
 mysqldump -u root -p laravel > backup_YYYYMMDD.sql
 ```
 
-MySQL Docker:
+Backup (Docker):
 
 ```bash
 docker compose exec -T mysql sh -lc "mysqldump -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" > backup_YYYYMMDD.sql
 ```
 
-### 4) Restore database (jika perlu)
-
-MySQL lokal:
+Restore (lokal):
 
 ```bash
 mysql -u root -p laravel < backup_YYYYMMDD.sql
 ```
 
-MySQL Docker:
+Restore (Docker):
 
 ```bash
 docker compose exec -i mysql sh -lc "mysql -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" < backup_YYYYMMDD.sql
 ```
 
-### 5) Deploy/update aman (ringkas)
+## Deploy / Update Aman
 
 ```bash
 php artisan down
@@ -285,53 +202,37 @@ php artisan view:cache
 php artisan up
 ```
 
-Untuk setup Docker, jalankan command `php artisan ...` via:
+Jika Docker:
 
 ```bash
 docker compose exec -T app <COMMAND>
 ```
 
-## Command Cepat yang Sering Dipakai
+## 8. Command Cepat
 
 ```bash
-# Jalankan dev all-in-one
 composer run dev
-
-# Jalankan test
 composer run test
-
-# Bersihkan cache
 php artisan optimize:clear
-
-# Rebuild frontend
 npm run build
 ```
 
-## Troubleshooting Umum
+## 9. Troubleshooting Singkat
 
-1. Error `Vite manifest not found`
+1. `Vite manifest not found`
+   - Jalankan `npm run build`
+2. `No application encryption key has been specified`
+   - Jalankan `php artisan key:generate`
+3. Tidak bisa akses `/adminmki` setelah login
+   - Pastikan `email_verified_at` terisi
+   - Pastikan status user aktif (`1`)
+4. Error tabel tidak ditemukan
+   - Jalankan `php artisan migrate`
+5. Perubahan tidak muncul
+   - Jalankan `php artisan optimize:clear`
+   - Hard refresh browser
 
-- Solusi: jalankan `npm run build`
-
-2. Error `No application encryption key has been specified`
-
-- Solusi: jalankan `php artisan key:generate`
-
-3. Login berhasil tapi tidak bisa masuk `/adminmki`
-
-- Cek `email_verified_at` user tidak `NULL`
-- Cek `status` user aktif (`1`)
-
-4. Error tabel tidak ditemukan (`SQLSTATE...`)
-
-- Solusi: jalankan `php artisan migrate`
-
-5. Perubahan code tidak tampil
-
-- Jalankan `php artisan optimize:clear`
-- Hard refresh browser
-
-## Struktur Folder Inti
+## 10. Struktur Folder Penting
 
 ```text
 app/
@@ -341,8 +242,8 @@ resources/views/
 routes/
 ```
 
-## Catatan Tambahan
+## 11. Catatan Penting
 
-- Jangan edit file hasil build di `public/build`
-- Lakukan backup DB sebelum migrasi di environment produksi
-- Simpan kredensial `.env` di secret manager, jangan commit ke GitHub
+- Jangan edit file hasil build di `public/build`.
+- Wajib backup DB sebelum migrasi produksi.
+- Simpan kredensial `.env` di secret manager, jangan commit ke Git.
