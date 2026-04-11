@@ -225,6 +225,37 @@ export default function AdminPanel({
 
         return true;
     };
+    const SCAN_LOG_CACHE_LIMIT = 500;
+    const sanitizeScanActivitiesTotal = (value, fallback = 0) => {
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) && numericValue >= 0
+            ? numericValue
+            : fallback;
+    };
+    const mergeDeltaScanLogs = (currentLogs, incomingLogs) => {
+        if (!Array.isArray(incomingLogs) || incomingLogs.length === 0) {
+            return currentLogs;
+        }
+
+        const knownIds = new Set((currentLogs || []).map((log) => Number(log?.id || 0)));
+        const deltaLogs = [];
+
+        incomingLogs.forEach((log) => {
+            const logId = Number(log?.id || 0);
+            if (logId <= 0 || knownIds.has(logId)) {
+                return;
+            }
+
+            knownIds.add(logId);
+            deltaLogs.push(log);
+        });
+
+        if (deltaLogs.length === 0) {
+            return currentLogs;
+        }
+
+        return [...deltaLogs, ...(currentLogs || [])].slice(0, SCAN_LOG_CACHE_LIMIT);
+    };
     const createEmptyUserInput = () => ({ name: '', email: '', role: 'Brand Owner', password: '', status: 1 });
     const createEmptyProductInput = () => ({
         name: '',
@@ -578,9 +609,13 @@ export default function AdminPanel({
 
     const [products, setProducts] = useState((databaseProducts || []).map(normalizeProductRecord));
     const [scanLogs, setScanLogs] = useState((databaseScanLogs || []).map(normalizeScanLogRecord));
-    const [scanActivitiesCount, setScanActivitiesCount] = useState(Number(databaseScanActivitiesCount || 0));
+    const [scanActivitiesCount, setScanActivitiesCount] = useState(
+        sanitizeScanActivitiesTotal(databaseScanActivitiesCount, 0)
+    );
     const [isRefreshingScanLogs, setIsRefreshingScanLogs] = useState(false);
     const [selectedScanLogDetail, setSelectedScanLogDetail] = useState(null);
+    const latestScanLogIdRef = useRef(Number((databaseScanLogs || [])[0]?.id || 0));
+    const isScanRefreshInFlightRef = useRef(false);
 
     const [batches, setBatches] = useState((databaseTagBatches || []).map(normalizeBatchRecord));
     const [isSavingBatch, setIsSavingBatch] = useState(false);
@@ -733,14 +768,23 @@ export default function AdminPanel({
 
     useEffect(() => {
         const incomingLogs = (databaseScanLogs || []).map(normalizeScanLogRecord);
-        setScanLogs((currentLogs) => (
-            areScanLogCollectionsEqual(currentLogs, incomingLogs) ? currentLogs : incomingLogs
-        ));
+        setScanLogs((currentLogs) => {
+            const resolvedLogs = areScanLogCollectionsEqual(currentLogs, incomingLogs)
+                ? currentLogs
+                : incomingLogs;
+
+            latestScanLogIdRef.current = Number(resolvedLogs?.[0]?.id || 0);
+            return resolvedLogs;
+        });
     }, [databaseScanLogs]);
+
     useEffect(() => {
-        const nextCount = Number(databaseScanActivitiesCount);
-        setScanActivitiesCount(Number.isFinite(nextCount) && nextCount >= 0 ? nextCount : 0);
+        setScanActivitiesCount(sanitizeScanActivitiesTotal(databaseScanActivitiesCount, 0));
     }, [databaseScanActivitiesCount]);
+
+    useEffect(() => {
+        latestScanLogIdRef.current = Number(scanLogs?.[0]?.id || 0);
+    }, [scanLogs]);
 
     useEffect(() => {
         setScanValidLimit(normalizeScanLimitSetting(securitySettings?.maxValidScanLimit, 5));
@@ -770,38 +814,84 @@ export default function AdminPanel({
     }, [activeTab]);
 
     useEffect(() => {
-        if (activeTab !== 'scan_history') {
+        const shouldLiveSyncScanLogs = activeTab === 'scan_history' || activeTab === 'dashboard';
+        const shouldShowRefreshIndicator = activeTab === 'scan_history';
+        if (!shouldLiveSyncScanLogs) {
             return;
         }
-        if (selectedScanLogDetail) {
+        if (activeTab === 'scan_history' && selectedScanLogDetail) {
             return;
         }
 
         let isActive = true;
+
         const fetchScanActivities = () => {
-            axios.get('/scan-activities')
+            if (isScanRefreshInFlightRef.current) {
+                return;
+            }
+
+            isScanRefreshInFlightRef.current = true;
+            if (shouldShowRefreshIndicator) {
+                setIsRefreshingScanLogs(true);
+            }
+
+            const latestKnownId = Number(latestScanLogIdRef.current || 0);
+            const requestParams = latestKnownId > 0
+                ? { after_id: latestKnownId }
+                : undefined;
+
+            axios.get('/scan-activities', { params: requestParams })
                 .then((response) => {
                     if (!isActive) return;
+
                     const logs = Array.isArray(response?.data?.logs) ? response.data.logs : [];
                     const normalizedLogs = logs.map(normalizeScanLogRecord);
+                    const responseMode = String(response?.data?.mode || 'snapshot');
+                    const requiresResync = Boolean(response?.data?.requires_resync);
+
+                    if (responseMode === 'delta' && !requiresResync && latestKnownId > 0) {
+                        if (normalizedLogs.length > 0) {
+                            const newestDeltaId = Number(normalizedLogs?.[0]?.id || 0);
+                            if (newestDeltaId > latestScanLogIdRef.current) {
+                                latestScanLogIdRef.current = newestDeltaId;
+                            }
+
+                            setScanLogs((currentLogs) => mergeDeltaScanLogs(currentLogs, normalizedLogs));
+                            setScanActivitiesCount((currentTotal) => (
+                                sanitizeScanActivitiesTotal(currentTotal, 0) + normalizedLogs.length
+                            ));
+                        }
+                        return;
+                    }
+
                     setScanLogs((currentLogs) => (
                         areScanLogCollectionsEqual(currentLogs, normalizedLogs) ? currentLogs : normalizedLogs
                     ));
-                    const totalFromApi = Number(response?.data?.total);
-                    setScanActivitiesCount(Number.isFinite(totalFromApi) && totalFromApi >= 0 ? totalFromApi : normalizedLogs.length);
+                    setScanActivitiesCount(
+                        sanitizeScanActivitiesTotal(response?.data?.total, normalizedLogs.length)
+                    );
                 })
                 .catch(() => {
                     // Silent by design: keep existing logs if refresh fails.
+                })
+                .finally(() => {
+                    if (isActive && shouldShowRefreshIndicator) {
+                        setIsRefreshingScanLogs(false);
+                    }
+                    isScanRefreshInFlightRef.current = false;
                 });
         };
 
         fetchScanActivities();
-        const intervalId = setInterval(fetchScanActivities, 5000);
+        const intervalId = setInterval(fetchScanActivities, 3000);
 
         return () => {
             isActive = false;
             clearInterval(intervalId);
-            setIsRefreshingScanLogs(false);
+            if (shouldShowRefreshIndicator) {
+                setIsRefreshingScanLogs(false);
+            }
+            isScanRefreshInFlightRef.current = false;
         };
     }, [activeTab, selectedScanLogDetail]);
 

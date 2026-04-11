@@ -55,10 +55,17 @@
         <script>
 
             var geolocationOptions = {
-                enableHighAccuracy: false,
-                timeout: 4500,
-                maximumAge: 300000
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             };
+            var geolocationFallbackOptions = {
+                enableHighAccuracy: false,
+                timeout: 6000,
+                maximumAge: 60000
+            };
+            var MAX_GEO_RETRY = 2;
+            var MAX_ACCEPTABLE_ACCURACY_METERS = 1200;
             var requireGpsForScan = @json(isset($requireGps) ? (bool) $requireGps : false);
 
             var setScanCoordinates = function(latitude, longitude) {
@@ -72,6 +79,12 @@
                 return latitude !== '' && longitude !== '';
             };
 
+            var requestBrowserPosition = function(options) {
+                return new Promise(function(resolve, reject) {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+                });
+            };
+
             var resolveScanCoordinates = function() {
                 return new Promise(function(resolve, reject) {
                     if (!navigator.geolocation) {
@@ -79,27 +92,53 @@
                         return;
                     }
 
-                    navigator.geolocation.getCurrentPosition(function(position) {
-                        if (!position || !position.coords) {
-                            reject('Lokasi GPS tidak terbaca. Aktifkan izin lokasi lalu coba lagi.');
-                            return;
-                        }
+                    var attempt = 0;
+                    var tryResolve = function() {
+                        attempt += 1;
 
-                        var latitude = Number(position.coords.latitude);
-                        var longitude = Number(position.coords.longitude);
-                        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-                            reject('Koordinat lokasi tidak valid. Aktifkan GPS lalu coba lagi.');
-                            return;
-                        }
+                        requestBrowserPosition(geolocationOptions)
+                            .catch(function() {
+                                return requestBrowserPosition(geolocationFallbackOptions);
+                            })
+                            .then(function(position) {
+                                if (!position || !position.coords) {
+                                    reject('Lokasi GPS tidak terbaca. Aktifkan izin lokasi lalu coba lagi.');
+                                    return;
+                                }
 
-                        setScanCoordinates(latitude.toFixed(6), longitude.toFixed(6));
-                        resolve({
-                            latitude: latitude.toFixed(6),
-                            longitude: longitude.toFixed(6)
-                        });
-                    }, function() {
-                        reject('Izin lokasi wajib diaktifkan untuk verifikasi kode.');
-                    }, geolocationOptions);
+                                var latitude = Number(position.coords.latitude);
+                                var longitude = Number(position.coords.longitude);
+                                if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                                    reject('Koordinat lokasi tidak valid. Aktifkan GPS lalu coba lagi.');
+                                    return;
+                                }
+
+                                var accuracy = Number(position.coords.accuracy);
+                                if (
+                                    Number.isFinite(accuracy) &&
+                                    accuracy > MAX_ACCEPTABLE_ACCURACY_METERS
+                                ) {
+                                    if (attempt < MAX_GEO_RETRY) {
+                                        tryResolve();
+                                        return;
+                                    }
+
+                                    reject('Akurasi GPS masih rendah. Pindah ke area terbuka lalu coba lagi.');
+                                    return;
+                                }
+
+                                setScanCoordinates(latitude.toFixed(6), longitude.toFixed(6));
+                                resolve({
+                                    latitude: latitude.toFixed(6),
+                                    longitude: longitude.toFixed(6)
+                                });
+                            })
+                            .catch(function() {
+                                reject('Izin lokasi wajib diaktifkan untuk verifikasi kode.');
+                            });
+                    };
+
+                    tryResolve();
                 });
             };
 

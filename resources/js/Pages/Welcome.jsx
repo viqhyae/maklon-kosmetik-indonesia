@@ -2,39 +2,77 @@ import { Head, Link } from '@inertiajs/react';
 import axios from 'axios';
 import { useMemo, useState } from 'react';
 
-const resolveBrowserCoordinates = () =>
-    new Promise((resolve) => {
-        if (
-            typeof window === 'undefined' ||
-            !window.navigator?.geolocation
-        ) {
-            resolve(null);
-            return;
+const HIGH_ACCURACY_GEO_OPTIONS = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
+};
+
+const FALLBACK_GEO_OPTIONS = {
+    enableHighAccuracy: false,
+    timeout: 6000,
+    maximumAge: 60000,
+};
+
+const MAX_GEO_ATTEMPTS = 2;
+const MAX_ACCEPTABLE_ACCURACY_METERS = 1200;
+
+const requestBrowserPosition = (options) =>
+    new Promise((resolve, reject) => {
+        window.navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+
+const resolveBrowserCoordinates = async () => {
+    if (
+        typeof window === 'undefined' ||
+        !window.navigator?.geolocation
+    ) {
+        return null;
+    }
+
+    for (let attempt = 1; attempt <= MAX_GEO_ATTEMPTS; attempt += 1) {
+        let position = null;
+
+        try {
+            position = await requestBrowserPosition(HIGH_ACCURACY_GEO_OPTIONS);
+        } catch {
+            try {
+                position = await requestBrowserPosition(FALLBACK_GEO_OPTIONS);
+            } catch {
+                position = null;
+            }
         }
 
-        window.navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const latitude = Number(position?.coords?.latitude);
-                const longitude = Number(position?.coords?.longitude);
+        if (!position?.coords) {
+            continue;
+        }
 
-                if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-                    resolve(null);
-                    return;
-                }
+        const latitude = Number(position.coords.latitude);
+        const longitude = Number(position.coords.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            continue;
+        }
 
-                resolve({
-                    latitude: Number(latitude.toFixed(6)),
-                    longitude: Number(longitude.toFixed(6)),
-                });
-            },
-            () => resolve(null),
-            {
-                enableHighAccuracy: false,
-                timeout: 4500,
-                maximumAge: 300000,
-            },
-        );
-    });
+        const accuracy = Number(position.coords.accuracy);
+        if (
+            Number.isFinite(accuracy) &&
+            accuracy > MAX_ACCEPTABLE_ACCURACY_METERS
+        ) {
+            if (attempt < MAX_GEO_ATTEMPTS) {
+                continue;
+            }
+
+            return null;
+        }
+
+        return {
+            latitude: Number(latitude.toFixed(6)),
+            longitude: Number(longitude.toFixed(6)),
+        };
+    }
+
+    return null;
+};
 
 export default function Welcome() {
     const [code, setCode] = useState('');

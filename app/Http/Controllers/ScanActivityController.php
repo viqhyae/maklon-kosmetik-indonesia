@@ -4,12 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Brand;
 use App\Models\ScanActivity;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
 class ScanActivityController extends Controller
 {
-    public function index()
+    private const SNAPSHOT_FETCH_LIMIT = 500;
+    private const DELTA_FETCH_LIMIT = 120;
+
+    public function index(Request $request)
     {
         $query = ScanActivity::query();
         if ($this->isBrandOwner()) {
@@ -21,18 +25,79 @@ class ScanActivityController extends Controller
             }
         }
 
+        $afterId = max(0, (int) $request->query('after_id', 0));
+        if ($afterId > 0) {
+            $deltaLogs = (clone $query)
+                ->where('id', '>', $afterId)
+                ->latest('id')
+                ->limit(self::DELTA_FETCH_LIMIT + 1)
+                ->get($this->scanColumns());
+
+            $requiresResync = $deltaLogs->count() > self::DELTA_FETCH_LIMIT;
+            if ($requiresResync) {
+                $total = (clone $query)->count();
+                $snapshotLogs = (clone $query)
+                    ->latest('id')
+                    ->limit(self::SNAPSHOT_FETCH_LIMIT)
+                    ->get($this->scanColumns())
+                    ->map(fn (ScanActivity $scanActivity) => $this->scanPayload($scanActivity))
+                    ->all();
+
+                return response()->json([
+                    'logs' => $snapshotLogs,
+                    'total' => $total,
+                    'mode' => 'snapshot',
+                    'requires_resync' => false,
+                ]);
+            }
+
+            $deltaPayload = $deltaLogs
+                ->take(self::DELTA_FETCH_LIMIT)
+                ->map(fn (ScanActivity $scanActivity) => $this->scanPayload($scanActivity))
+                ->all();
+
+            return response()->json([
+                'logs' => $deltaPayload,
+                'mode' => 'delta',
+                'requires_resync' => false,
+            ]);
+        }
+
         $total = (clone $query)->count();
         $logs = $query
             ->latest('id')
-            ->limit(500)
-            ->get()
+            ->limit(self::SNAPSHOT_FETCH_LIMIT)
+            ->get($this->scanColumns())
             ->map(fn (ScanActivity $scanActivity) => $this->scanPayload($scanActivity))
             ->all();
 
         return response()->json([
             'logs' => $logs,
             'total' => $total,
+            'mode' => 'snapshot',
+            'requires_resync' => false,
         ]);
+    }
+
+    private function scanColumns(): array
+    {
+        return [
+            'id',
+            'scanned_at',
+            'verification_code',
+            'scanned_code',
+            'product_name',
+            'brand_name',
+            'location_label',
+            'ip_address',
+            'scan_count',
+            'result_status',
+            'tag_status',
+            'suspend_reason',
+            'user_agent',
+            'latitude',
+            'longitude',
+        ];
     }
 
     private function scanPayload(ScanActivity $scanActivity): array

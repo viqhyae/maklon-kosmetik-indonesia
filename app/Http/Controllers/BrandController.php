@@ -160,7 +160,7 @@ class BrandController extends Controller {
             $databaseScanLogs = $scanQuery
                 ->latest('id')
                 ->limit(500)
-                ->get()
+                ->get($this->scanActivityColumns())
                 ->map(fn (ScanActivity $scanActivity) => $this->scanActivityPayload($scanActivity))
                 ->all();
         }
@@ -439,6 +439,27 @@ class BrandController extends Controller {
             'userAgent' => $scanActivity->user_agent ?: '-',
             'latitude' => $scanActivity->latitude,
             'longitude' => $scanActivity->longitude,
+        ];
+    }
+
+    private function scanActivityColumns(): array
+    {
+        return [
+            'id',
+            'scanned_at',
+            'verification_code',
+            'scanned_code',
+            'product_name',
+            'brand_name',
+            'location_label',
+            'ip_address',
+            'scan_count',
+            'result_status',
+            'tag_status',
+            'suspend_reason',
+            'user_agent',
+            'latitude',
+            'longitude',
         ];
     }
 
