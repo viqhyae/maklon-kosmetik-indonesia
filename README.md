@@ -18,6 +18,7 @@ Fungsi utama:
 - Generate batch tag / QR
 - Manajemen user & role (`Super Admin`, `Brand Owner`)
 - Pengaturan keamanan (`max_valid_scan_limit`, `require_gps`)
+- Riwayat scan digrup per Tag/QR Code, dengan detail per urutan scan, export CSV, dan preview Google Maps bila koordinat tersedia.
 
 ## 1. Flowchart Alur Sistem
 
@@ -46,7 +47,7 @@ Frontend:
 Infra:
 
 - Docker + Docker Compose (opsional, direkomendasikan untuk onboarding cepat)
-- Service compose: `app`, `mysql`, `phpmyadmin`
+- Service compose: `app` (PHP-FPM), `web` (Nginx), `db` (MySQL 8), `vite` (Vite HMR)
 
 ## 3. Kebutuhan Sistem
 
@@ -63,7 +64,7 @@ Infra:
 - Git
 - Docker Desktop
 - Docker Compose
-- Node.js + npm (untuk build asset frontend di host)
+- Node.js + npm hanya diperlukan bila build asset dijalankan langsung di host.
 
 ## Rekomendasi resource minimum
 
@@ -116,19 +117,22 @@ git clone https://github.com/viqhyae/maklon-kosmetik-indonesia.git mki
 cd mki
 cp .env.example .env
 docker compose up -d --build
-docker compose exec -T app composer install
-docker compose exec -T app php artisan key:generate
-docker compose exec -T app php artisan migrate
+docker compose exec -T app php artisan key:generate --force
+docker compose exec -T app php artisan migrate --force
 docker compose exec -T app php artisan storage:link
-npm install
-npm run dev
 ```
 
 Default endpoint:
 
-- App: `http://localhost:8000`
-- phpMyAdmin: `http://localhost:8080`
+- App: `http://localhost:7777`
+- Vite HMR: `http://localhost:5173`
 - MySQL host port: `3307`
+
+Catatan Docker:
+
+- `app` otomatis menjalankan `composer install` saat `vendor/autoload.php` belum ada.
+- `vite` otomatis menjalankan `npm install` dan `npm run dev -- --host 0.0.0.0 --port 5173`.
+- Gunakan `APP_PORT` dan `FORWARD_DB_PORT` di `.env` bila port default perlu diubah.
 
 ## 6. Akun Awal
 
@@ -175,7 +179,7 @@ mysqldump -u root -p laravel > backup_YYYYMMDD.sql
 Backup (Docker):
 
 ```bash
-docker compose exec -T mysql sh -lc "mysqldump -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" > backup_YYYYMMDD.sql
+docker compose exec -T db sh -lc 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' > backup_YYYYMMDD.sql
 ```
 
 Restore (lokal):
@@ -187,7 +191,7 @@ mysql -u root -p laravel < backup_YYYYMMDD.sql
 Restore (Docker):
 
 ```bash
-docker compose exec -i mysql sh -lc "mysql -uroot -p$MYSQL_ROOT_PASSWORD $MYSQL_DATABASE" < backup_YYYYMMDD.sql
+docker compose exec -i db sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < backup_YYYYMMDD.sql
 ```
 
 ## Deploy / Update Aman
@@ -251,3 +255,6 @@ routes/
 - Jangan edit file hasil build di `public/build`.
 - Wajib backup DB sebelum migrasi produksi.
 - Simpan kredensial `.env` di secret manager, jangan commit ke Git.
+- `.env.example` disiapkan untuk environment production/hosting; untuk lokal ubah `APP_ENV`, `APP_DEBUG`, `APP_URL`, dan koneksi database sesuai mode jalan yang dipakai.
+- Riwayat scan mengambil koordinat dari kolom `latitude`/`longitude`, lalu fallback parsing dari teks `location`. Preview Google Maps hanya muncul bila koordinat valid.
+- Export CSV aktivitas scan mengikuti semua hasil pencarian/filter global, bukan hanya halaman pagination yang sedang aktif.
