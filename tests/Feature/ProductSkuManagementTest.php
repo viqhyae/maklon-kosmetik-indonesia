@@ -43,9 +43,7 @@ class ProductSkuManagementTest extends TestCase
             'dynamic_fields' => [
                 'bpom' => 'NA1234567',
             ],
-            'image' => UploadedFile::fake()->createWithContent('produk.png', base64_decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
-            )),
+            'image' => UploadedFile::fake()->image('produk.jpg', 500, 500),
             'image_upload_expected' => 1,
         ], [
             'Accept' => 'application/json',

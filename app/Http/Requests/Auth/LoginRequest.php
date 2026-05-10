@@ -45,6 +45,7 @@ class LoginRequest extends FormRequest
         $this->ensureIsNotRateLimited();
 
         $email = strtolower(trim((string) $this->input('email')));
+        $remember = $this->boolean('remember');
         $password = (string) $this->input('password');
 
         $user = User::query()->where('email', $email)->first();
@@ -65,7 +66,7 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        Auth::login($user, false);
+        Auth::login($user, $remember);
         RateLimiter::clear($this->throttleKey());
     }
 

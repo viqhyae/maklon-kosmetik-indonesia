@@ -196,8 +196,6 @@ docker compose exec -i db sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_
 
 ## Deploy / Update Aman
 
-Lihat juga [DEPLOY.md](DEPLOY.md) untuk catatan production domain `https://cek.maklonkosmetik.co.id`.
-
 ```bash
 php artisan down
 git pull origin main

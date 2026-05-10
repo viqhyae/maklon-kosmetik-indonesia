@@ -641,7 +641,7 @@ class BrandController extends Controller {
         $payload = [
             'name' => $ownerName,
             'email' => $candidateEmail,
-            'password' => Str::password(32),
+            'password' => 'Owner12345!',
         ];
 
         if (Schema::hasColumn('users', 'role')) {
@@ -649,7 +649,7 @@ class BrandController extends Controller {
         }
 
         if (Schema::hasColumn('users', 'status')) {
-            $payload['status'] = 0;
+            $payload['status'] = 1;
         }
 
         User::query()->create($payload);
