@@ -771,7 +771,7 @@ const ProductForm = () => {
                                     <Search size={18} className="text-slate-400 flex-shrink-0" />
                                     <input
                                         type="text"
-                                        placeholder="Cari kategori... (Contoh: Parfum, Wajah)"
+                                        placeholder="Cari industri... (Contoh: Food, Retail)"
                                         className="bg-transparent border-none outline-none text-sm w-full focus:ring-0"
                                         value={catSearchKeyword}
                                         onChange={(e) => setCatSearchKeyword(e.target.value)}

@@ -1,2 +1,7 @@
 User-agent: *
-Disallow:
+Disallow: /adminmki
+Disallow: /login
+Disallow: /profile
+Disallow: /users
+Disallow: /settings
+Disallow: /scan-activities

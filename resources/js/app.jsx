@@ -12,12 +12,22 @@ const exactPageTitles = new Set([
 ]);
 
 if (typeof window !== 'undefined') {
+    const protectedPathPrefixes = [
+        '/adminmki',
+        '/profile',
+        '/verify-email',
+        '/confirm-password',
+    ];
+
     window.addEventListener('pageshow', (event) => {
         const navigationEntries = window.performance?.getEntriesByType?.('navigation') || [];
         const navigationEntry = navigationEntries[0];
         const isBackForwardNavigation = event.persisted || navigationEntry?.type === 'back_forward';
+        const isProtectedPath = protectedPathPrefixes.some((prefix) =>
+            window.location.pathname.startsWith(prefix)
+        );
 
-        if (isBackForwardNavigation && window.location.pathname.startsWith('/adminmki')) {
+        if (isBackForwardNavigation && isProtectedPath) {
             window.location.reload();
         }
     });

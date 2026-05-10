@@ -5,6 +5,11 @@
 
     RewriteEngine On
 
+    # Block direct access to sensitive Laravel files if the document root is misconfigured.
+    RewriteRule (^|/)(\.env|\.env\.encrypted|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|.*\.sql)$ - [F,L,NC]
+    RewriteRule ^(app|bootstrap|config|database|docker|resources|routes|tests|vendor)(/|$) - [F,L,NC]
+    RewriteRule ^storage/(app|framework|logs)(/|$) - [F,L,NC]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -22,4 +27,11 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)"
 </IfModule>

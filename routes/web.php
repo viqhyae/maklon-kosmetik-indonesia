@@ -7,6 +7,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\LegacyFrontController;
 use App\Http\Controllers\ProductVerificationController;
 use App\Http\Controllers\ProductSkuController;
+use App\Http\Controllers\PublicStorageController;
 use App\Http\Controllers\ScanActivityController;
 use App\Http\Controllers\SecuritySettingController;
 use App\Http\Controllers\TagBatchController;
@@ -16,11 +17,19 @@ use Illuminate\Support\Facades\Route;
 
 // Halaman depan website publik (frontend lama)
 Route::get('/', [LegacyFrontController::class, 'index'])->name('home');
-Route::post('/kode', [LegacyFrontController::class, 'kode'])->name('kode');
+Route::post('/kode', [LegacyFrontController::class, 'kode'])
+    ->middleware('throttle:60,1')
+    ->name('kode');
 
 // Endpoint publik untuk cek keaslian kode produk
 Route::get('/verify-product-code', [ProductVerificationController::class, 'check'])
+    ->middleware('throttle:60,1')
     ->name('public.verify-code');
+
+// Fallback untuk shared hosting yang tidak bisa menjalankan `php artisan storage:link`.
+Route::get('/storage/{path}', [PublicStorageController::class, 'show'])
+    ->where('path', '.*')
+    ->name('public-storage.show');
 
 // Perubahan di sini: Rute dashboard sekarang memanggil fungsi 'index' di BrandController
 Route::get('/adminmki', [BrandController::class, 'index'])

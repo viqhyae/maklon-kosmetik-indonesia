@@ -1,0 +1,7 @@
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^laravel_app(/|$) - [F,L,NC]
+    RewriteRule (^|/)(\.env|\.env\.encrypted|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|.*\.sql)$ - [F,L,NC]
+</IfModule>

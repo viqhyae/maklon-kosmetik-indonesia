@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnforceMaxSessionAge;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,6 +34,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+        $request->session()->put(EnforceMaxSessionAge::LOGIN_STARTED_AT_KEY, time());
 
         return redirect()->intended(route('dashboard', absolute: false));
     }
@@ -47,10 +50,26 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
+        $this->forgetAuthCookies();
+
         if ($request->headers->has('X-Inertia')) {
             return Inertia::location(route('home'));
         }
 
         return redirect()->route('home');
+    }
+
+    private function forgetAuthCookies(): void
+    {
+        $path = config('session.path', '/');
+        $domain = config('session.domain');
+        $guard = Auth::guard('web');
+
+        Cookie::queue(Cookie::forget((string) config('session.cookie'), $path, $domain));
+        Cookie::queue(Cookie::forget('XSRF-TOKEN', $path, $domain));
+
+        if (method_exists($guard, 'getRecallerName')) {
+            Cookie::queue(Cookie::forget($guard->getRecallerName(), $path, $domain));
+        }
     }
 }

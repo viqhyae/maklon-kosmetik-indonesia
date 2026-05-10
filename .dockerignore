@@ -1,8 +1,12 @@
 .git
 .idea
 .vscode
+.env
+.env.*
+*.sql
 node_modules
 vendor
+public/build
 storage/logs
 storage/framework/cache/*
 storage/framework/sessions/*
